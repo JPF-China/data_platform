@@ -1,0 +1,35 @@
+# OS / editor
+.DS_Store
+
+# Python cache / virtualenv
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+backend/.venv/
+
+# Node / frontend build artifacts
+node_modules/
+frontend/node_modules/
+dist/
+build/
+coverage/
+frontend/dist/
+frontend/.vite/
+
+# Local env / logs
+.env
+.env.*
+*.log
+
+# Local data inputs (do not commit)
+data/*.h5
+data/**/*.h5
+jldpath/*.jld2
+jldpath/**/*.jld2
+
+# Generated intermediates / local assets
+parquet_data/
+stitch_route_planning_optimization.zip
