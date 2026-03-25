@@ -4,7 +4,7 @@
 
 ## 1. 目标
 
-构建一个面向哈尔滨车辆轨迹数据的网站系统，支持入仓、BfMap 路网导入与构建、映射生成、统计、热力图、路线评估和前端展示。
+构建一个面向哈尔滨车辆轨迹数据的网站系统，支持入仓、路网入仓模块、统计、热力图、路线评估和前端展示。
 
 ## 2. 技术栈
 
@@ -43,19 +43,18 @@
 
 ```text
 H5 + JLD2 -> ingress
-bfmap_ways.csv -> BfMap 路网生成(road_segments)
-ingest 明细 + road_segments -> 映射生成(ingest_road_map)
-映射就绪后 -> 统计刷新(stats)
+bfmap_ways.csv + ingest 明细 -> 路网入仓模块(road_segments, ingest_road_map)
+路网入仓模块就绪后 -> 统计刷新(stats)
 路网 + 统计就绪后 -> 路径搜索(route search)
 FastAPI -> React
 ```
 
-固定执行顺序：`ingress -> BfMap 路网生成 -> 映射生成 -> stats -> route search`。
+固定执行顺序：`ingress -> 路网入仓模块 -> stats -> route search`。
 
 ## 7. 运行模式
 
-- `rebuild`：重建明细表、BfMap 路网、映射并刷新统计表。
-- `optimize`：不入仓，只做数据库优化、路网/映射维护和统计刷新。
+- `rebuild`：重建明细表、路网入仓模块并刷新统计表。
+- `optimize`：不入仓，只做数据库优化。
 - `compute`：只刷新统计表（要求路网与映射已就绪）。
 - `smoke`：只验证统计表和接口，不扫描大表。
 

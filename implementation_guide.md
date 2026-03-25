@@ -13,10 +13,9 @@
 
 | 模块 | 输入 | 输出 | 禁止事项 |
 |---|---|---|---|
-| 数据入仓 | H5/JLD2/路网文件 | 明细表、入仓日志 | 不做统计、不做路径搜索 |
-| BfMap 路网构建 | `bfmap_ways.csv` | `bfmap_ways_import`、`road_segments`（pgRouting 主图） | 不扫描业务明细表 |
-| 映射生成 | 入仓明细 + `road_segments` | `ingest_road_map` | 不做图搜索 |
-| 数据库优化 | 明细表 | 分区/索引/分析结果 | 不读原始文件、不直接返回前端 |
+| 数据入仓 | H5/JLD2 | 明细表、入仓日志 | 不做统计、不做路径搜索 |
+| 路网入仓模块 | `bfmap_ways.csv`、入仓明细 | `bfmap_ways_import`、`road_segments`、`ingest_road_map` | 不做图搜索、不做统计 |
+| 数据库优化 | 明细表 | 分区/索引/分析结果 | 不读原始文件、不刷新统计、不改路网 |
 | 统计刷新 | 明细表、统计配置 | 统计表 | 不扫描前端请求、不做路径计算 |
 | 路径搜索 | 起点/终点/时间、路网图数据 | 最短路/最快路结果 | 不扫业务明细表 |
 | API 层 | 请求参数、统计表、路径结果 | JSON | 不做重计算 |
@@ -50,7 +49,7 @@
 | 表名 | 作用 | 主键/唯一约束 | 输入依赖 | 输出依赖 |
 |---|---|---|---|---|
 | `bfmap_ways_import` | BfMap CSV 原始导入表 | `gid` 主键 | `bfmap_ways.csv` | `road_segments` |
-| `road_segments` | BfMap 路网边表（pgRouting 主图） | `road_id` 唯一（=`gid`） | BfMap CSV | 路径搜索、映射生成 |
+| `road_segments` | BfMap 路网边表（pgRouting 主图） | `road_id` 唯一（=`gid`） | BfMap CSV | 路径搜索、`ingest_road_map` |
 | `ingest_road_map` | 入仓路段到 BfMap 边映射 | `(trip_road_id, osm_id)` 或业务唯一键 | `trip_match_meta`、`trip_segments`、`road_segments` | 统计刷新、审计 |
 | `route_results` | 路径结果表 | `id` 主键 | 路径搜索结果 | 前端路线展示、审计 |
 
@@ -91,7 +90,6 @@ road_segments + road_speed_bins -> 路径搜索 -> route_results
 **输入**
 - `data/*.h5`
 - `jldpath/*.jld2`
-- `bfmap_ways.csv`
 
 **输出**
 - `trips`
@@ -121,36 +119,25 @@ road_segments + road_speed_bins -> 路径搜索 -> route_results
 - 索引创建/重建
 - `VACUUM/ANALYZE`
 
-### 4.3 BfMap 路网构建模块
+### 4.3 路网入仓模块
 
 **输入**
 - `bfmap_ways.csv`
+- 入仓明细（`trip_match_meta`、`trip_segments`）
 
 **输出**
 - `bfmap_ways_import`
 - `road_segments`
+- `ingest_road_map`
 
 **职责**
 - 从 BfMap CSV 构建 pgRouting 可用边表
 - 维护 `source/target/cost/reverse_cost` 路由字段
 - 维护 `gid/osm_id/class_id/length_m/geom` 业务字段
+- 将入仓侧 `road_id` 等匹配键对齐到 BfMap 路网边，供统计和路径复用
+- 该模块仅作为 `rebuild` 子流程存在，不单独暴露运行入口
 
-### 4.4 映射生成模块
-
-**输入**
-- `trip_match_meta`
-- `trip_segments`
-- `road_segments`
-
-**输出**
-- `ingest_road_map`
-
-**职责**
-- 优先按 `trip_segments.road_id == road_segments.road_id(gid)` 直连对齐
-- 为热力图和路段速度桶提供稳定 join 键
-- 沉淀映射审计字段（命中策略、版本、置信度）
-
-### 4.5 统计刷新模块
+### 4.4 统计刷新模块
 
 **输入**
 - `trips`
@@ -174,9 +161,9 @@ road_segments + road_speed_bins -> 路径搜索 -> route_results
 - 热力图
 - 道路速度桶
 - 行数统计
-- 热力图和道路速度桶刷新前必须完成 BfMap 路网和映射生成
+- 热力图和道路速度桶刷新前必须完成路网入仓模块
 
-### 4.6 路径搜索模块
+### 4.5 路径搜索模块
 
 **输入**
 - 起点、终点、起始时间
@@ -201,7 +188,7 @@ road_segments + road_speed_bins -> 路径搜索 -> route_results
 - 退化或低速时允许最短路与最快路边序列一致
 - 路径结果落库时保留查询时刻（无时区）和边序列（用于可审计与重放）
 
-### 4.7 API 模块
+### 4.6 API 模块
 
 **接口清单（当前稳定）**
 - `GET /api/v1/summary/daily`
@@ -237,7 +224,7 @@ road_segments + road_speed_bins -> 路径搜索 -> route_results
 - `route/compare` 的请求/响应应提供 OpenAPI 示例，降低联调歧义。
 - `route/compare` 错误语义：参数模型错误走 422，服务侧可预期业务错误走 400。
 
-### 4.8 前端模块
+### 4.7 前端模块
 
 **输入**
 - API 返回值
@@ -257,17 +244,17 @@ road_segments + road_speed_bins -> 路径搜索 -> route_results
 | 模式 | 输入 | 输出 | 做什么 | 不做什么 |
 |---|---|---|---|---|
 | `ingest` | 源文件 | 明细表 | 清理明细层并并行入仓、重建明细索引、analyze | 不清理统计层和路径层依赖表 |
-| `rebuild` | 源文件 | 明细表+路网+映射+统计表 | 清表/重建分区、入仓、导入 BfMap CSV、生成映射、刷新统计、准备路径资产 | 不保留旧明细 |
-| `optimize` | 明细表 | 分区/索引/路网/统计 | 维护分区、索引、`VACUUM/ANALYZE`、维护 BfMap 路网与映射、刷新统计 | 不读原始文件 |
+| `rebuild` | 源文件 | 明细表+路网+映射+统计表 | 清表/重建分区、入仓、路网入仓模块、刷新统计、准备路径资产 | 不保留旧明细 |
+| `optimize` | 明细表 | 分区/索引 | 维护分区、索引、`VACUUM/ANALYZE` | 不读原始文件、不刷新统计、不改路网 |
 | `compute` | 明细表 | 统计表 | 在路网和映射可用前提下刷新统计表 | 不改明细结构 |
 | `smoke` | 统计表、API | 读验证结果 | 验证读链路 | 不扫大表 |
 | `runtime` | 统计表、路径结果 | API 响应 | 提供在线查询 | 不做离线计算 |
 
 ## 7. 核心执行顺序（固定）
 
-1. `ingress`
-2. `BfMap 路网生成`
-3. `映射生成`
+1. `ingest`
+2. `路网入仓模块`
+3. `compute`
 4. `stats`
 5. `route search`
 
@@ -278,20 +265,25 @@ road_segments + road_speed_bins -> 路径搜索 -> route_results
 1. 将大表改为按日期分区。
 2. 补齐必要索引。
 3. 增加统计表和行数统计表。
-4. 建立路网边表。
 
 ### 6.2 统计层
 
 1. 把所有图表与指标预计算。
-2. 刷新逻辑统一放入 `rebuild/optimize/compute`。
+2. 刷新逻辑统一放入 `compute`。
 3. API 只读统计表。
 
-### 6.3 路径层
+### 6.3 路网入仓模块
+
+1. 建立 BfMap 路网边表。
+2. 维护入仓路段到 BfMap 边的映射。
+3. 保障路径搜索所需图数据可用。
+
+### 6.4 路径层
 
 1. 准备数据库路径搜索数据。
 2. 将 Python 图遍历替换为数据库调用。
 
-### 6.4 API 层
+### 6.5 API 层
 
 1. 保持接口稳定。
 2. 让接口只做轻逻辑。
@@ -299,7 +291,7 @@ road_segments + road_speed_bins -> 路径搜索 -> route_results
 4. 为关键接口配置 response model 和 OpenAPI example。
 5. 通过契约测试和 SQL 审计测试确保 API 不读取明细表。
 
-### 6.5 前端层
+### 6.6 前端层
 
 1. 只消费 API。
 2. 不加入业务计算。
@@ -316,12 +308,11 @@ road_segments + road_speed_bins -> 路径搜索 -> route_results
 ## 9. 交付顺序
 
 1. 数据库结构与分区
-2. BfMap 路网构建
-3. 映射生成
-4. 统计预计算表
-5. API 改读模型
-6. 路径数据库化
-7. 前端接稳定 API
+2. 路网入仓模块
+3. 统计预计算表
+4. API 改读模型
+5. 路径数据库化
+6. 前端接稳定 API
 
 ## 10. 与测试体系的关系
 

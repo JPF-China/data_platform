@@ -19,8 +19,7 @@
 ```text
 H5/JLD2 原始文件
   -> 入仓(ingest)
-  -> BfMap 路网导入与构建(road_segments)
-  -> 匹配映射生成(ingest_road_map)
+  -> 路网入仓模块(road_segments, ingest_road_map)
   -> 统计刷新(compute)
   -> 路径搜索(route search)
   -> 在线服务(runtime)
@@ -29,8 +28,8 @@ H5/JLD2 原始文件
 ### 3.1 运行模式
 
 - `ingest`：只执行入仓编排，清理并重建明细层，不清理统计层和路径依赖表。
-- `rebuild`：总编排入口，串联入仓、BfMap CSV 路网导入、映射生成、统计刷新、路径能力准备与运行链路校验。
-- `optimize`：不触碰源文件，只做分区、索引、`VACUUM/ANALYZE`、BfMap 路网维护、映射维护和统计刷新。
+- `rebuild`：总编排入口，串联入仓、路网入仓模块、统计刷新、路径能力准备与运行链路校验；其中路网构建和映射生成不单独暴露运行入口。
+- `optimize`：不触碰源文件，只做入仓明细层的分区、索引、`VACUUM/ANALYZE` 维护。
 - `compute`：不入仓，只在路网和映射可用前提下刷新统计表。
 - `smoke`：只验证统计表和 API 可用性，不扫描大表。
 - `runtime`：日常服务态，API 仅读统计表和路径结果。
@@ -39,7 +38,7 @@ H5/JLD2 原始文件
 
 ### 4.1 原始层
 
-- 输入：`data/*.h5`、`jldpath/*.jld2`、`bfmap_ways.csv`
+- 输入：`data/*.h5`、`jldpath/*.jld2`
 - 作用：离线输入与归档，不作为在线查询主存储。
 
 ### 4.2 明细层
@@ -96,33 +95,34 @@ H5/JLD2 原始文件
 
 ### 6.1 数据入仓模块
 
-- 输入：H5/JLD2/路网源文件
+- 输入：H5/JLD2
 - 输出：明细表 + 入仓日志
 - 职责：解析、去重、补全、分块写入
 - 编排约束：`ingest` 仅清理入仓明细表，不清理统计层和路径层依赖表
 - 不做：统计刷新、路径搜索、前端展示
 
-### 6.2 BfMap 路网构建模块
+### 6.2 路网入仓模块
 
-- 输入：`bfmap_ways.csv`
-- 输出：`bfmap_ways_import`、`road_segments`
-- 职责：导入 BfMap 边表 CSV，并以 `gid` 作为 `road_segments.road_id` 构建 pgRouting 主图
-- 不做：业务统计、API 请求处理
+- 输入：`bfmap_ways.csv`、入仓明细（`trip_match_meta`、`trip_segments`）
+- 输出：`bfmap_ways_import`、`road_segments`、`ingest_road_map`
+- 职责：导入 BfMap 边表 CSV、构建 pgRouting 主图、生成入仓路段到 BfMap 边的映射
+- 编排约束：该模块仅作为 `rebuild` 子流程存在，不单独暴露运行入口
+- 不做：业务统计、API 请求处理、图搜索
 
-### 6.3 映射生成模块
+### 6.3 数据库优化模块
 
-- 输入：入仓明细（`trip_match_meta`、`trip_segments`）+ `road_segments`
-- 输出：`ingest_road_map`
-- 职责：将入仓侧 `road_id` 等匹配键对齐到 BfMap 路网边，供统计和路径复用
-- 不做：图搜索、前端响应
+- 输入：明细表
+- 输出：分区状态、索引状态、`VACUUM/ANALYZE` 结果
+- 职责：分区、索引、`VACUUM/ANALYZE`
+- 不做：读取原始文件、统计刷新、前端请求处理、路径搜索请求编排
 
-### 6.4 数据库优化与统计模块
+### 6.4 统计刷新模块
 
 - 输入：明细表 + `ingest_road_map`
-- 输出：统计表（含 `road_speed_bins`）、索引状态、分析结果
-- 职责：分区、索引、`VACUUM/ANALYZE`、先清理统计模块表再刷新预计算结果
+- 输出：统计表（含 `road_speed_bins`）
+- 职责：先清理统计模块表，再刷新预计算结果
 - 依赖约束：热力图和道路速度桶依赖 `road_segments` 与 `ingest_road_map` 已完成
-- 不做：读取原始文件、前端请求处理、路径搜索请求编排
+- 不做：分区、索引、`VACUUM/ANALYZE`、读取原始文件、路径搜索请求编排
 
 ### 6.5 独立路径搜索模块
 

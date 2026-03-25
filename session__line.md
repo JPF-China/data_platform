@@ -23,20 +23,20 @@
 **时间：2026-03-21 17:09:45**
 
 **实现目标：**  
-引入 BfMap 路网作为 pgRouting 的主图源，并建立入仓路段到 BfMap 边的映射关系。
+引入路网入仓模块作为 pgRouting 的主图源，并建立入仓路段到路网边的映射关系。
 
 **所做探索与变更：**  
 - 新增 `bfmap_ways_import` 表，用于直接导入 `bfmap_ways.csv` 原始数据。  
 - 新增 `ingest_road_map` 表，用于存储入仓路段 ID 到 BfMap 路段 ID 的映射。  
 - 创建了两个新服务：  
-  - `road_network_service.py`：负责从 CSV 导入 BfMap 数据，并构建 `road_segments` 表（填充 `source_node`、`target_node`、`cost`、`reverse_cost` 等 pgRouting 所需字段）。  
+  - `road_network_service.py`：负责从 CSV 导入路网数据，并构建 `road_segments` 表（填充 `source_node`、`target_node`、`cost`、`reverse_cost` 等 pgRouting 所需字段）。  
   - `road_mapping_service.py`：负责根据 `trip_segments.road_id` 与 `bfmap_ways_import.gid` 的匹配，生成映射关系。  
-- 在 `load_data.py` 的 `rebuild` 模式中，加入了 BfMap 路网构建和映射生成的步骤。  
-- 在 `stats_service.py` 中，将 `heatmap_bins` 和 `road_speed_bins` 的生成改为依赖 `ingest_road_map`，确保统计指标与 BfMap 路网对齐。  
+- 在 `load_data.py` 的 `rebuild` 模式中，加入了路网入仓模块步骤，统一完成 `bfmap_ways.csv` 导入、`road_segments` 构建与 `ingest_road_map` 生成。  
+- 在 `stats_service.py` 中，将 `heatmap_bins` 和 `road_speed_bins` 的生成改为依赖 `ingest_road_map`，确保统计指标与路网入仓模块对齐。  
 
 **探索与决策：**  
-- **采用原因**：原先的路径搜索依赖 `trip_segments` 构建的图，但 `trip_segments` 是轨迹数据派生的，无法保证路网拓扑的完整性。BfMap 是专业的路网数据，能够提供完整的图结构，是路径搜索的正确基础。  
-- **废弃的尝试**：在此之前（可能在更早的未记录会话中）曾尝试直接使用 OSM 路网，但 OSM 数据与轨迹匹配的 `road_id` 不一致，导致映射困难。BfMap 提供了统一的 `gid` 作为 `road_id`，与入仓数据中的 `road_id` 字段（来自 JLD2 的 `roads` 数组）天然对应，因此选择 BfMap。
+- **采用原因**：原先的路径搜索依赖 `trip_segments` 构建的图，但 `trip_segments` 是轨迹数据派生的，无法保证路网拓扑的完整性。路网入仓模块能够提供完整的图结构，是路径搜索的正确基础。  
+- **废弃的尝试**：在此之前（可能在更早的未记录会话中）曾尝试直接使用 OSM 路网，但 OSM 数据与轨迹匹配的 `road_id` 不一致，导致映射困难。当前采用统一的 `gid` 作为 `road_id`，与入仓数据中的 `road_id` 字段（来自 JLD2 的 `roads` 数组）天然对应，因此选择该方案。
 
 ---
 
@@ -94,7 +94,7 @@
 - 删除了 `agent.md`、`test_case_mapping.md`、`test_plan.md` 等文件，避免信息碎片化。  
 - 更新了所有子目录的 `README.md`，使其指向这三份核心文档。  
 - 在 `spec.md` 中补充了路径搜索方案的详细说明，包括速度桶命中、退化策略、无时区时间处理等。  
-- 在 `implementation_guide.md` 中明确了模块边界和依赖关系，特别是 BfMap 路网和映射生成模块的职责。  
+- 在 `implementation_guide.md` 中明确了模块边界和依赖关系，特别是路网入仓模块的职责。  
 - 在 `test_system.md` 中按模块重新组织了测试用例，并明确了回归测试的范围。  
 
 **探索与决策：**  
@@ -161,7 +161,7 @@ ETL 流程优化，将 `load_data.py` 中的大量函数拆分到独立服务，
 - 将 `load_data.py` 中的 `_ingest_one_file_task`、`_flush_pending_trips`、`upsert_trips_batch` 等函数迁移到 `ingest_service.py` 中。  
 - 将统计聚合函数迁移到 `stats_service.py` 中。  
 - 在 `load_data.py` 中新增 `_step_ingest_only` 函数，用于实现 `ingest` 模式（仅入仓，不刷新统计）。  
-- 在 `run_pipeline` 中增加了 `mode == "ingest"` 的分支，该分支会获取锁、清理明细表、并行入仓、重建索引、analyze，然后退出，**不执行统计刷新和路网/映射生成**。  
+- 在 `run_pipeline` 中增加了 `mode == "ingest"` 的分支，该分支会获取锁、清理明细表、并行入仓、重建索引、analyze，然后退出，**不执行统计刷新和路网入仓模块**。  
 - 在 `pyproject.toml` 中添加了 `networkx` 依赖（因为之前曾使用过），但后来在 `ses_2f054e5c6ffe...` 中已移除。  
 - 在 `test_system.md` 中补充了路径搜索模块的测试规范，明确了速度桶命中、回退逻辑、无时区时间处理等测试要点。  
 
@@ -207,7 +207,7 @@ ETL 流程优化，将 `load_data.py` 中的大量函数拆分到独立服务，
 **所做探索与变更：**  
 - 在 `db/models.py` 中将 `start_time`、`end_time`、`event_time` 等字段从 `TIMESTAMP(timezone=True)` 改为 `TIMESTAMP(timezone=False)`。  
 - 创建了 `infra/postgres/migrate_timezone_agnostic.sql` 迁移脚本，该脚本会将现有 `timestamptz` 数据转换为业务时区的无时区时间（默认 Asia/Shanghai）。  
-- 在 `implementation_guide.md` 中更新了模块地图，将 BfMap 路网和映射生成模块正式纳入统计流程的前置依赖。  
+- 在 `implementation_guide.md` 中更新了模块地图，将路网入仓模块正式纳入统计流程的前置依赖。  
 - 在 `spec.md` 中补充了“路径链路采用无时区 datetime 语义”的说明。  
 
 **探索与决策：**  
@@ -282,6 +282,25 @@ ETL 流程优化，将 `load_data.py` 中的大量函数拆分到独立服务，
 
 ---
 
+### 16. `ses_2f7d8c9a0ffeRouteNetUnify.json`  
+**时间：2026-03-25 00:00:00**
+
+**实现目标：**  
+**统一路网入仓命名并对齐文档与代码**，将路网入仓相关职责收敛为单一模块边界，并保持测试通过。
+
+**所做探索与变更：**  
+- 将 `spec.md`、`implementation_guide.md`、`backend/README.md`、`project_context.md` 中的路网相关旧表述统一改写为 `路网入仓模块`。  
+- 将 `backend/app/etl/load_data.py` 中路网入仓相关逻辑合并为单一子步骤，`rebuild` 继续执行全链路，`optimize` 仅保留明细层优化。  
+- 更新了 `session__line.md` 中的历史说明和 Mermaid 图，使模块命名与当前实现保持一致。  
+- 运行并通过了后端相关回归测试，确认路由、统计、pipeline 模式未受影响。  
+
+**探索与决策：**  
+- **采用原因**：路网构建和映射在概念上属于同一条“路网入仓”链路，独立命名会增加理解和维护成本。  
+- **采用原因**：`optimize` 与 `compute` 的职责边界更清晰后，执行模式更容易调度，也更便于回归验证。  
+- **验证方式**：通过后端测试集验证模块拆分后仍可正常工作，且未触碰线上数据库内容。  
+
+---
+
 ### 15. `ses_2e4c8bbf1ffeZfzBcCxeEkGqO3.json`  
 **时间：2026-03-23 23:52:00**
 
@@ -314,13 +333,10 @@ gantt
     确立直接并行入仓，删除CSV中间层 : 6, 2024-01-06, 1d
     拆分 ingest_service，新增 ingest 模式 : 10, 2024-01-10, 1d
 
-    section BfMap 路网构建模块
-    创建 bfmap_ways_import、road_segments : 4, 2024-01-04, 1d
+    section 路网入仓模块
+    创建 bfmap_ways_import、road_segments、ingest_road_map : 4, 2024-01-04, 1d
     集成到 rebuild 流程 : 4, 2024-01-04, 1d
-
-    section 映射生成模块
-    创建 ingest_road_map，实现映射逻辑 : 4, 2024-01-04, 1d
-    增加 stats_initialized 检查，依赖映射 : 9, 2024-01-09, 1d
+    增加 stats_initialized 检查，依赖路网入仓模块 : 9, 2024-01-09, 1d
 
     section 统计刷新模块
     heatmap_bins、road_speed_bins 依赖映射 : 4, 2024-01-04, 1d
@@ -350,4 +366,5 @@ gantt
     添加时区迁移脚本，明确无时区语义 : 13, 2024-01-13, 1d
     添加 pgrouting_environment.md : 15, 2024-01-15, 1d
     添加 README、.gitignore、首次运行日志 : 17, 2024-01-17, 1d
+    统一路网入仓命名，收敛路网构建与映射职责 : 18, 2024-01-18, 1d
 ```

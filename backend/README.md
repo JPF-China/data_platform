@@ -28,18 +28,14 @@ uv sync
 
 PostgreSQL/PostGIS 是在线主存储，不需要 CSV/Parquet 中间层。
 
-路由链路固定顺序：`ingress -> BfMap 路网生成 -> 映射生成 -> stats -> route search`。
-其中热力图和 `road_speed_bins` 依赖映射完成后再刷新。
-
-BfMap 路网生成细分为两层：
-1. 导入 `bfmap_ways.csv` 到 `bfmap_ways_import`
-2. 以 `gid` 作为 `road_segments.road_id` 构建 pgRouting 主图
+路由链路固定顺序：`ingest -> 路网入仓模块 -> compute -> stats -> route search`。
+其中热力图和 `road_speed_bins` 依赖路网入仓模块完成后再刷新。
 
 ### 4.1 运行模式
 
 - `ingest`：只执行入仓编排（只清理明细层，不清理统计表和路径依赖表）。
-- `rebuild`：总编排（入仓 + BfMap 路网生成 + 映射生成 + 统计刷新 + 路径能力准备 + 运行链路校验提示）。
-- `optimize`：不入仓，只做数据库优化、BfMap 路网/映射维护和统计刷新。
+- `rebuild`：总编排（入仓 + 路网入仓模块 + 统计刷新 + 路径能力准备 + 运行链路校验提示）。
+- `optimize`：不入仓，只做数据库优化。
 - `compute`：只刷新统计表（要求路网和映射已可用）。
 - `smoke`：只验证统计和接口，不扫描大表。
 
