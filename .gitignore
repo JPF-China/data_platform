@@ -21,8 +21,11 @@ frontend/.vite/
 
 # Local env / logs
 .env
-.env.*
+.env.local
 *.log
+
+# Keep .env.example files (they are templates)
+!.env.example
 
 # Local data inputs (do not commit)
 data/*.h5
