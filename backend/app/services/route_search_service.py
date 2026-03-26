@@ -65,6 +65,55 @@ def nearest_graph_node(db: Session, lat: float, lon: float) -> int:
     return int(row[0])
 
 
+def nearest_graph_node_with_snap(
+    db: Session, lat: float, lon: float
+) -> dict[str, float | int]:
+    sql = text(
+        """
+        WITH graph_nodes AS (
+          SELECT
+            source_node AS node_id,
+            ST_StartPoint(geom) AS node_geom
+          FROM road_segments
+          WHERE source_node IS NOT NULL
+
+          UNION ALL
+
+          SELECT
+            target_node AS node_id,
+            ST_EndPoint(geom) AS node_geom
+          FROM road_segments
+          WHERE target_node IS NOT NULL
+        ),
+        ranked AS (
+          SELECT DISTINCT ON (node_id)
+            node_id,
+            ST_Y(node_geom) AS lat,
+            ST_X(node_geom) AS lon,
+            ST_Distance(
+              node_geom::geography,
+              ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography
+            ) AS snap_distance_m
+          FROM graph_nodes
+          ORDER BY node_id, snap_distance_m
+        )
+        SELECT node_id, lat, lon, snap_distance_m
+        FROM ranked
+        ORDER BY snap_distance_m
+        LIMIT 1
+        """
+    )
+    row = db.execute(sql, {"lat": lat, "lon": lon}).mappings().first()
+    if row is None:
+        raise ValueError("road_segments graph is empty; prepare routing assets first")
+    return {
+        "node_id": int(row["node_id"]),
+        "lat": float(row["lat"]),
+        "lon": float(row["lon"]),
+        "snap_distance_m": float(row["snap_distance_m"]),
+    }
+
+
 def run_pgr_dijkstra(
     db: Session,
     start_node: int,

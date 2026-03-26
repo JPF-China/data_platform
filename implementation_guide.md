@@ -223,6 +223,8 @@ road_segments + road_speed_bins -> 路径搜索 -> route_results
 - API 输出必须绑定响应模型（response model），以固定字段和类型契约。
 - `route/compare` 的请求/响应应提供 OpenAPI 示例，降低联调歧义。
 - `route/compare` 错误语义：参数模型错误走 422，服务侧可预期业务错误走 400。
+- `route/compare` 服务层应在搜索前执行点位自动吸附（snap to nearest graph node），并返回吸附结果（`snapped_start_point`、`snapped_end_point`）。
+- `route/compare` 响应契约应明确包含：`start_time`、`query_time`、`query_bucket_start`、`nearest_*`、`route_*`、`snapped_*`、`shortest_route`、`fastest_route`。
 
 ### 4.7 前端模块
 
@@ -238,6 +240,12 @@ road_segments + road_speed_bins -> 路径搜索 -> route_results
 - 路线图层控制与结果面板控制分离（Clear Layers vs Clear Result）
 - shortest/fastest 路径重合时提示用户
 - 地图模块允许懒加载以降低首屏资源压力
+- Workspace 采用左侧模块导航 + 右侧内容区，支持 Light/Dark 主题切换（主题开关位于左侧底部）
+- Overview 同时承载 KPI、趋势图、箱形图，支持单页滚动查看
+- Heatmap 提供拥堵图例与清空/恢复热力图能力（保留底图）
+- Route 子页使用独立地图并支持地图选点回填经纬度（Pick Start/End）
+- Route 点位不可达问题的自动修正建议在后端服务层实现（优先 `route_service` + `route_search_service`）
+- Heatmap 子页仅展示热力图与底图；Route 线层和起终点标记只在 Route 子页展示
 
 ## 6. 执行模式
 

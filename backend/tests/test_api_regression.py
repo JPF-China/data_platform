@@ -75,6 +75,8 @@ def test_route_compare_and_persistence(client):
     body = res.json()
     assert "shortest_route" in body
     assert "fastest_route" in body
+    assert "snapped_start_point" in body
+    assert "snapped_end_point" in body
     assert "edges" in body["shortest_route"]
     assert len(body["shortest_route"]["edges"]) >= 1
     first = body["shortest_route"]["edges"][0]

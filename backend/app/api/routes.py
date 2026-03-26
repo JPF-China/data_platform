@@ -57,6 +57,18 @@ ROUTE_COMPARE_RESPONSE_EXAMPLE = {
     "nearest_end_node": 1003,
     "route_start_node": 1001,
     "route_end_node": 1003,
+    "snapped_start_point": {
+        "lat": 45.756,
+        "lon": 126.642,
+        "node_id": 1001,
+        "snap_distance_m": 12.6,
+    },
+    "snapped_end_point": {
+        "lat": 45.721,
+        "lon": 126.588,
+        "node_id": 1003,
+        "snap_distance_m": 8.2,
+    },
     "shortest_route": {
         "weight": "distance_m",
         "distance_m": 7000.0,

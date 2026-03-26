@@ -1,12 +1,12 @@
 from sqlalchemy.orm import Session
 
-from app.schemas import RouteCompareRequest, RouteCompareResponse
+from app.schemas import RouteCompareRequest, RouteCompareResponse, SnappedPoint
 from app.services.route_payload_service import build_route_payload
 from app.services.route_persistence_service import persist_route
 from app.services.route_search_service import (
     ensure_routing_ready,
     has_speed_bins_for_bucket,
-    nearest_graph_node,
+    nearest_graph_node_with_snap,
     run_pgr_dijkstra,
     snap_to_bucket,
     to_naive_datetime,
@@ -23,10 +23,14 @@ def compare_routes(db: Session, payload: RouteCompareRequest) -> RouteCompareRes
         end_point=payload.end_point,
     )
 
-    start_node = nearest_graph_node(
+    snapped_start = nearest_graph_node_with_snap(
         db, payload.start_point.lat, payload.start_point.lon
     )
-    end_node = nearest_graph_node(db, payload.end_point.lat, payload.end_point.lon)
+    snapped_end = nearest_graph_node_with_snap(
+        db, payload.end_point.lat, payload.end_point.lon
+    )
+    start_node = int(snapped_start["node_id"])
+    end_node = int(snapped_end["node_id"])
 
     bucket_start = snap_to_bucket(payload.query_time)
 
@@ -69,6 +73,18 @@ def compare_routes(db: Session, payload: RouteCompareRequest) -> RouteCompareRes
         nearest_end_node=end_node,
         route_start_node=start_node,
         route_end_node=end_node,
+        snapped_start_point=SnappedPoint(
+            lat=float(snapped_start["lat"]),
+            lon=float(snapped_start["lon"]),
+            node_id=start_node,
+            snap_distance_m=float(snapped_start["snap_distance_m"]),
+        ),
+        snapped_end_point=SnappedPoint(
+            lat=float(snapped_end["lat"]),
+            lon=float(snapped_end["lon"]),
+            node_id=end_node,
+            snap_distance_m=float(snapped_end["snap_distance_m"]),
+        ),
         shortest_route=shortest_route,
         fastest_route=fastest_route,
     )

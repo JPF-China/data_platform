@@ -117,6 +117,16 @@ make smoke
 
 `/api/v1/route/compare` 请求体需同时提供 `start_time` 与 `query_time`，前者表示行程起始时刻，后者用于命中 `road_speed_bins` 的 5 分钟速度桶。
 
+`/api/v1/route/compare` 会在搜索前自动将输入起终点吸附到最近路网节点，并在响应中返回：
+
+- `start_time`、`query_time`、`query_bucket_start`
+- `nearest_start_node`、`nearest_end_node`
+- `route_start_node`、`route_end_node`
+- `shortest_route`、`fastest_route`
+
+- `snapped_start_point`：`lat`、`lon`、`node_id`、`snap_distance_m`
+- `snapped_end_point`：`lat`、`lon`、`node_id`、`snap_distance_m`
+
 ## 9. 回归测试
 
 - Run all backend tests:

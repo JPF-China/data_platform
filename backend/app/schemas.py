@@ -8,6 +8,13 @@ class PointInput(BaseModel):
     lon: float = Field(..., ge=-180, le=180)
 
 
+class SnappedPoint(BaseModel):
+    lat: float
+    lon: float
+    node_id: int
+    snap_distance_m: float
+
+
 class RouteCompareRequest(BaseModel):
     start_time: datetime
     query_time: datetime = Field(
@@ -93,6 +100,8 @@ class RouteCompareResponse(BaseModel):
     nearest_end_node: int
     route_start_node: int
     route_end_node: int
+    snapped_start_point: SnappedPoint
+    snapped_end_point: SnappedPoint
     shortest_route: RoutePlan
     fastest_route: RoutePlan
 

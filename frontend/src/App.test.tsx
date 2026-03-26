@@ -135,15 +135,19 @@ describe("App", () => {
 
   it("renders dashboard and KPI cards", async () => {
     render(<App />);
-    expect(screen.getByText("Urban Mobility Command Board")).toBeInTheDocument();
+    expect(screen.getByText("Workspace")).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText("Total Trips")).toBeInTheDocument());
+    expect(screen.getByText("Heatmap Playback")).toBeInTheDocument();
     expect(screen.getByText("Distance Boxplot")).toBeInTheDocument();
     expect(screen.getByText("Speed Boxplot")).toBeInTheDocument();
-    expect(screen.getByText("Heatmap Playback")).toBeInTheDocument();
   });
 
   it("renders route result edge table after compare", async () => {
     render(<App />);
+    const routeEntry = await screen.findByRole("button", { name: /route compare/i });
+    await act(async () => {
+      routeEntry.click();
+    });
     const btn = await screen.findByText("Run Route Compare");
     await act(async () => {
       btn.click();

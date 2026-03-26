@@ -45,9 +45,26 @@ export type RouteData = {
   estimated_time_s: number;
   edges: RouteEdge[];
   path_wkt_segments?: string[];
+  query_bucket_start?: string | null;
+};
+
+export type SnappedPoint = {
+  lat: number;
+  lon: number;
+  node_id: number;
+  snap_distance_m: number;
 };
 
 export type RouteResult = {
+  start_time?: string;
+  query_time?: string;
+  query_bucket_start?: string;
+  nearest_start_node?: number;
+  nearest_end_node?: number;
+  route_start_node?: number;
+  route_end_node?: number;
+  snapped_start_point?: SnappedPoint;
+  snapped_end_point?: SnappedPoint;
   shortest_route?: RouteData;
   fastest_route?: RouteData;
 };

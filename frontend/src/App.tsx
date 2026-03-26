@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -33,6 +33,27 @@ import {
 } from "./api";
 
 type GeoJsonSourceLike = { setData: (data: unknown) => void };
+type MapBounds = [[number, number], [number, number]];
+type MapInstanceLike = {
+  addControl: (control: unknown, position?: string) => void;
+  on: (event: string, cb: (...args: unknown[]) => void) => void;
+  addSource: (id: string, source: unknown) => void;
+  addLayer: (layer: unknown) => void;
+  getSource: (id: string) => unknown;
+  getLayer: (id: string) => unknown;
+  setLayoutProperty: (id: string, name: string, value: string) => void;
+  fitBounds: (bounds: MapBounds, opts: { padding: number; duration: number }) => void;
+  remove: () => void;
+  resize: () => void;
+  getContainer?: () => HTMLDivElement | null;
+};
+type MaplibreModuleLike = {
+  Map: new (cfg: unknown) => MapInstanceLike;
+  NavigationControl: new () => unknown;
+};
+type ThemeMode = "dark" | "light";
+type AppSection = "overview" | "heatmap" | "route";
+type RoutePickMode = "none" | "start" | "end";
 
 const tooltipValue = (value: unknown): number => {
   if (typeof value === "number") return value;
@@ -52,10 +73,28 @@ const safeNum = (value: unknown): number => {
   return 0;
 };
 
+const tooltipTheme = {
+  contentStyle: {
+    background: "var(--bg-panel-soft)",
+    border: "1px solid var(--line)",
+    borderRadius: 10,
+    color: "var(--text-main)",
+  },
+  labelStyle: {
+    color: "var(--text-main)",
+    fontWeight: 700,
+  },
+  itemStyle: {
+    color: "var(--text-dim)",
+  },
+};
+
 function BoxplotMini({ data, unit }: { data: BoxRow[]; unit: string }) {
   const [hoverText, setHoverText] = useState<string>("");
   if (!data.length) return <div className="empty">No boxplot data</div>;
-  const all = data.flatMap((d) => [d.min_value, d.q1, d.median, d.q3, d.max_value]).filter((v) => Number.isFinite(v));
+  const all = data
+    .flatMap((d) => [d.min_value, d.q1, d.median, d.q3, d.max_value])
+    .filter((v) => Number.isFinite(v));
   if (!all.length) return <div className="empty">No boxplot data</div>;
   const min = Math.min(...all);
   const max = Math.max(...all);
@@ -65,9 +104,14 @@ function BoxplotMini({ data, unit }: { data: BoxRow[]; unit: string }) {
   const chartBottom = 186;
   const usableH = chartBottom - chartTop;
   const band = width / data.length;
-  const y = (v: number) => chartBottom - ((v - min) / Math.max(1e-9, max - min)) * usableH;
+  const y = (v: number) =>
+    chartBottom - ((v - min) / Math.max(1e-9, max - min)) * usableH;
 
-  const rows = data.filter((d) => [d.min_value, d.q1, d.median, d.q3, d.max_value].every((v) => Number.isFinite(v)));
+  const rows = data.filter((d) =>
+    [d.min_value, d.q1, d.median, d.q3, d.max_value].every((v) =>
+      Number.isFinite(v)
+    )
+  );
   return (
     <div className="boxplot-wrap">
       <svg viewBox={`0 0 ${width} ${height}`} className="boxplot-svg">
@@ -76,16 +120,37 @@ function BoxplotMini({ data, unit }: { data: BoxRow[]; unit: string }) {
           const boxW = Math.min(34, band * 0.45);
           return (
             <g key={`${d.trip_date}-${i}`}>
-              <line x1={cx} x2={cx} y1={y(d.min_value)} y2={y(d.max_value)} stroke="#7ab8d3" strokeWidth={1.4} />
-              <line x1={cx - boxW / 2} x2={cx + boxW / 2} y1={y(d.max_value)} y2={y(d.max_value)} stroke="#7ab8d3" strokeWidth={1.2} />
-              <line x1={cx - boxW / 2} x2={cx + boxW / 2} y1={y(d.min_value)} y2={y(d.min_value)} stroke="#7ab8d3" strokeWidth={1.2} />
+              <line
+                x1={cx}
+                x2={cx}
+                y1={y(d.min_value)}
+                y2={y(d.max_value)}
+                stroke="var(--plot-line)"
+                strokeWidth={1.4}
+              />
+              <line
+                x1={cx - boxW / 2}
+                x2={cx + boxW / 2}
+                y1={y(d.max_value)}
+                y2={y(d.max_value)}
+                stroke="var(--plot-line)"
+                strokeWidth={1.2}
+              />
+              <line
+                x1={cx - boxW / 2}
+                x2={cx + boxW / 2}
+                y1={y(d.min_value)}
+                y2={y(d.min_value)}
+                stroke="var(--plot-line)"
+                strokeWidth={1.2}
+              />
               <rect
                 x={cx - boxW / 2}
                 y={y(d.q3)}
                 width={boxW}
                 height={Math.max(2, y(d.q1) - y(d.q3))}
-                fill="rgba(34,211,238,0.35)"
-                stroke="#22d3ee"
+                fill="var(--plot-box-bg)"
+                stroke="var(--plot-box-line)"
                 strokeWidth={1.2}
                 onMouseEnter={() =>
                   setHoverText(
@@ -94,7 +159,14 @@ function BoxplotMini({ data, unit }: { data: BoxRow[]; unit: string }) {
                 }
                 onMouseLeave={() => setHoverText("")}
               />
-              <line x1={cx - boxW / 2} x2={cx + boxW / 2} y1={y(d.median)} y2={y(d.median)} stroke="#ffb74a" strokeWidth={1.8} />
+              <line
+                x1={cx - boxW / 2}
+                x2={cx + boxW / 2}
+                y1={y(d.median)}
+                y2={y(d.median)}
+                stroke="var(--plot-median)"
+                strokeWidth={1.8}
+              />
               <title>{`${d.trip_date} min:${d.min_value.toFixed(2)} ${unit}, q1:${d.q1.toFixed(2)} ${unit}, median:${d.median.toFixed(2)} ${unit}, q3:${d.q3.toFixed(2)} ${unit}, max:${d.max_value.toFixed(2)} ${unit}, n:${d.sample_count}`}</title>
               <text x={cx} y={202} textAnchor="middle" className="boxplot-label">
                 {(d.trip_date ?? "").slice(5)}
@@ -103,7 +175,9 @@ function BoxplotMini({ data, unit }: { data: BoxRow[]; unit: string }) {
           );
         })}
       </svg>
-      <div className="boxplot-hover">{hoverText || "Hover a box to see exact values"}</div>
+      <div className="boxplot-hover">
+        {hoverText || "Hover a box to see exact values"}
+      </div>
     </div>
   );
 }
@@ -115,13 +189,45 @@ const defaultRoutePayload: RoutePayload = {
   end_point: { lat: 45.721, lon: 126.588 },
 };
 
+const navItems: Array<{
+  id: AppSection;
+  title: string;
+  desc: string;
+  icon: string;
+  group: string;
+}> = [
+  {
+    id: "overview",
+    title: "Overview",
+    desc: "Core KPIs, trends and boxplots",
+    icon: "OV",
+    group: "Analytics",
+  },
+  {
+    id: "heatmap",
+    title: "Heatmap Playback",
+    desc: "Road flow time buckets",
+    icon: "HM",
+    group: "Analytics",
+  },
+  {
+    id: "route",
+    title: "Route Compare",
+    desc: "Shortest vs fastest path",
+    icon: "RT",
+    group: "Routing",
+  },
+];
+
 function parseLineStringWkt(wkt: string): number[][] | null {
   const m = wkt.trim().match(/^LINESTRING\s*\((.*)\)$/i);
   if (!m) return null;
   const points = m[1]
     .split(",")
     .map((p) => p.trim().split(/\s+/).map(Number))
-    .filter((arr) => arr.length >= 2 && Number.isFinite(arr[0]) && Number.isFinite(arr[1]))
+    .filter(
+      (arr) => arr.length >= 2 && Number.isFinite(arr[0]) && Number.isFinite(arr[1])
+    )
     .map((arr) => [arr[0], arr[1]]);
   return points.length >= 2 ? points : null;
 }
@@ -140,16 +246,34 @@ function App() {
   const [bucketIndex, setBucketIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [heatData, setHeatData] = useState<HeatItem[]>([]);
-  const [bbox, setBbox] = useState<{ minLat: number; minLon: number; maxLat: number; maxLon: number } | null>(null);
+  const [bbox, setBbox] = useState<{
+    minLat: number;
+    minLon: number;
+    maxLat: number;
+    maxLon: number;
+  } | null>(null);
   const [capability, setCapability] = useState<RouteCapability | null>(null);
   const [capabilityError, setCapabilityError] = useState<string | null>(null);
   const [showShortestOnMap, setShowShortestOnMap] = useState(true);
   const [showFastestOnMap, setShowFastestOnMap] = useState(true);
+  const [showHeatmapOnMap, setShowHeatmapOnMap] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const mapRef = useRef<any>(null);
-  const maplibreRef = useRef<any>(null);
-  const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const [theme, setTheme] = useState<ThemeMode>("light");
+  const [activeSection, setActiveSection] = useState<AppSection>("overview");
+  const [routePickMode, setRoutePickMode] = useState<RoutePickMode>("none");
+  const [mapInitTick, setMapInitTick] = useState(0);
+
+  const heatMapRef = useRef<MapInstanceLike | null>(null);
+  const routeMapRef = useRef<MapInstanceLike | null>(null);
+  const maplibreRef = useRef<MaplibreModuleLike | null>(null);
+  const heatMapContainerRef = useRef<HTMLDivElement | null>(null);
+  const routeMapContainerRef = useRef<HTMLDivElement | null>(null);
+  const routePickModeRef = useRef<RoutePickMode>("none");
+
+  useEffect(() => {
+    routePickModeRef.current = routePickMode;
+  }, [routePickMode]);
 
   useEffect(() => {
     const run = async () => {
@@ -194,36 +318,39 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!mapContainerRef.current || mapRef.current) return;
-    let cancelled = false;
-    let localMap: any | null = null;
+    document.documentElement.setAttribute("data-theme", theme);
+  }, [theme]);
 
-    const setup = async () => {
-      const mod = await import("maplibre-gl");
-      const maplibre = mod.default;
-      maplibreRef.current = maplibre;
-      if (cancelled || !mapContainerRef.current) return;
+  const initializeMap = useCallback(async (
+    container: HTMLDivElement,
+    targetRef: { current: MapInstanceLike | null },
+    variant: "heatmap" | "route"
+  ) => {
+    if (targetRef.current) return;
+    const maplibre =
+      maplibreRef.current ??
+      ((await import("maplibre-gl")).default as unknown as MaplibreModuleLike);
+    maplibreRef.current = maplibre;
 
-      const map = new maplibre.Map({
-        container: mapContainerRef.current,
-        style: {
-          version: 8,
-          sources: {
-            osm: {
-              type: "raster",
-              tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
-              tileSize: 256,
-              attribution: "© OpenStreetMap contributors",
-            },
+    const map = new maplibre.Map({
+      container,
+      style: {
+        version: 8,
+        sources: {
+          osm: {
+            type: "raster",
+            tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+            tileSize: 256,
+            attribution: "© OpenStreetMap contributors",
           },
-          layers: [{ id: "osm", type: "raster", source: "osm" }],
         },
-        center: [126.64, 45.76],
-        zoom: 11,
-      });
-      localMap = map;
-      map.addControl(new maplibre.NavigationControl(), "top-right");
-      map.on("load", () => {
+        layers: [{ id: "osm", type: "raster", source: "osm" }],
+      },
+      center: [126.64, 45.76],
+      zoom: 11,
+    });
+    map.addControl(new maplibre.NavigationControl(), "top-right");
+    map.on("load", () => {
       map.addSource("heat-lines", {
         type: "geojson",
         data: { type: "FeatureCollection", features: [] },
@@ -333,21 +460,99 @@ function App() {
         source: "route-points",
         paint: {
           "circle-radius": ["case", ["==", ["get", "kind"], "start"], 7, 6],
-          "circle-color": ["case", ["==", ["get", "kind"], "start"], "#39ffaf", "#ff5f8f"],
+          "circle-color": [
+            "case",
+            ["==", ["get", "kind"], "start"],
+            "#39ffaf",
+            "#ff5f8f",
+          ],
           "circle-stroke-color": "#0b1322",
           "circle-stroke-width": 2,
         },
       });
-      });
-      mapRef.current = map;
+
+      if (variant === "route") {
+        map.on("click", (eventArg) => {
+          const e = eventArg as { lngLat: { lat: number; lng: number } };
+          const mode = routePickModeRef.current;
+          if (mode === "none") return;
+          const lat = Number(e.lngLat.lat.toFixed(6));
+          const lon = Number(e.lngLat.lng.toFixed(6));
+          setRoutePayload((prev) => {
+            if (mode === "start") {
+              return {
+                ...prev,
+                start_point: { lat, lon },
+              };
+            }
+            return {
+              ...prev,
+              end_point: { lat, lon },
+            };
+          });
+        });
+      }
+      setMapInitTick((v) => v + 1);
+    });
+    targetRef.current = map;
+  }, []);
+
+  const ensureMapReady = useCallback(async (
+    container: HTMLDivElement,
+    targetRef: { current: MapInstanceLike | null }
+  ) => {
+    const existingMap = targetRef.current;
+    if (!existingMap) {
+      await initializeMap(container, targetRef, targetRef === heatMapRef ? "heatmap" : "route");
+      return;
+    }
+
+    const currentContainer =
+      typeof existingMap.getContainer === "function"
+        ? existingMap.getContainer()
+        : null;
+
+    if (currentContainer !== container) {
+      existingMap.remove();
+      targetRef.current = null;
+      await initializeMap(container, targetRef, targetRef === heatMapRef ? "heatmap" : "route");
+      return;
+    }
+
+    existingMap.resize();
+  }, [initializeMap]);
+
+  useEffect(() => {
+    const setup = async () => {
+      if (heatMapContainerRef.current) {
+        await ensureMapReady(heatMapContainerRef.current, heatMapRef);
+      }
+      if (routeMapContainerRef.current) {
+        await ensureMapReady(routeMapContainerRef.current, routeMapRef);
+      }
     };
-
     void setup();
+  }, [activeSection, ensureMapReady]);
 
+  useEffect(() => {
+    if (activeSection === "heatmap" && heatMapRef.current) {
+      window.setTimeout(() => heatMapRef.current?.resize(), 0);
+    }
+    if (activeSection === "route" && routeMapRef.current) {
+      window.setTimeout(() => routeMapRef.current?.resize(), 0);
+    }
+  }, [activeSection]);
+
+  useEffect(() => {
     return () => {
-      cancelled = true;
-      if (localMap) localMap.remove();
-      mapRef.current = null;
+      if (heatMapRef.current) {
+        heatMapRef.current.remove();
+        heatMapRef.current = null;
+      }
+      if (routeMapRef.current) {
+        routeMapRef.current.remove();
+        routeMapRef.current = null;
+      }
     };
   }, []);
 
@@ -387,10 +592,8 @@ function App() {
   }, [selectedDate, bucketIndex, buckets, bbox]);
 
   useEffect(() => {
-    if (!mapRef.current) return;
-    const map = mapRef.current;
-    const src = map.getSource("heat-lines") as GeoJsonSourceLike | undefined;
-    if (!src) return;
+    const map = heatMapRef.current;
+    if (!map) return;
     const features = heatData.flatMap((item) => {
       try {
         const geom = JSON.parse(item.geometry);
@@ -425,16 +628,15 @@ function App() {
       }
       return [];
     });
-    src.setData({ type: "FeatureCollection", features } as any);
-  }, [heatData]);
+    const src = map.getSource("heat-lines") as GeoJsonSourceLike | undefined;
+    if (src) {
+      src.setData({ type: "FeatureCollection", features });
+    }
+  }, [heatData, mapInitTick]);
 
   useEffect(() => {
-    if (!mapRef.current) return;
-    const map = mapRef.current;
-    const shortestSource = map.getSource("shortest-route-lines") as GeoJsonSourceLike | undefined;
-    const fastestSource = map.getSource("fastest-route-lines") as GeoJsonSourceLike | undefined;
-    const pointsSource = map.getSource("route-points") as GeoJsonSourceLike | undefined;
-    if (!shortestSource || !fastestSource || !pointsSource) return;
+    const map = routeMapRef.current;
+    if (!map) return;
 
     const shortestFeatures = (routeResult?.shortest_route?.path_wkt_segments ?? [])
       .map((wkt) => parseLineStringWkt(wkt))
@@ -454,70 +656,105 @@ function App() {
         geometry: { type: "LineString", coordinates: coords },
       }));
 
-    shortestSource.setData({ type: "FeatureCollection", features: shortestFeatures } as any);
-    fastestSource.setData({ type: "FeatureCollection", features: fastestFeatures } as any);
+    const shortestSource = map.getSource("shortest-route-lines") as
+      | GeoJsonSourceLike
+      | undefined;
+    const fastestSource = map.getSource("fastest-route-lines") as
+      | GeoJsonSourceLike
+      | undefined;
+    const pointsSource = map.getSource("route-points") as
+      | GeoJsonSourceLike
+      | undefined;
+    if (!shortestSource || !fastestSource || !pointsSource) return;
 
-    pointsSource.setData(
-      {
-        type: "FeatureCollection",
-        features: [
-          {
-            type: "Feature",
-            properties: { kind: "start" },
-            geometry: {
-              type: "Point",
-              coordinates: [routePayload.start_point.lon, routePayload.start_point.lat],
-            },
+    shortestSource.setData({
+      type: "FeatureCollection",
+      features: shortestFeatures,
+    });
+    fastestSource.setData({
+      type: "FeatureCollection",
+      features: fastestFeatures,
+    });
+
+    pointsSource.setData({
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          properties: { kind: "start" },
+          geometry: {
+            type: "Point",
+            coordinates: [routePayload.start_point.lon, routePayload.start_point.lat],
           },
-          {
-            type: "Feature",
-            properties: { kind: "end" },
-            geometry: {
-              type: "Point",
-              coordinates: [routePayload.end_point.lon, routePayload.end_point.lat],
-            },
+        },
+        {
+          type: "Feature",
+          properties: { kind: "end" },
+          geometry: {
+            type: "Point",
+            coordinates: [routePayload.end_point.lon, routePayload.end_point.lat],
           },
-        ],
-      } as any
+        },
+      ],
+    });
+  }, [routeResult, routePayload, mapInitTick]);
+
+  useEffect(() => {
+    const maps = [heatMapRef.current, routeMapRef.current].filter(
+      (map): map is MapInstanceLike => map !== null
     );
-  }, [routeResult, routePayload]);
+    maps.forEach((map) => {
+      const isHeatMap = map === heatMapRef.current;
+      const isRouteMap = map === routeMapRef.current;
+      const heatVisibility = isHeatMap && showHeatmapOnMap ? "visible" : "none";
+      const routeVisibility = isRouteMap;
+      if (map.getLayer("heat-lines-layer")) {
+        map.setLayoutProperty("heat-lines-layer", "visibility", heatVisibility);
+      }
+      if (map.getLayer("heat-lines-glow")) {
+        map.setLayoutProperty("heat-lines-glow", "visibility", heatVisibility);
+      }
+      if (map.getLayer("shortest-route-lines-layer")) {
+        map.setLayoutProperty(
+          "shortest-route-lines-layer",
+          "visibility",
+          routeVisibility && showShortestOnMap ? "visible" : "none"
+        );
+      }
+      if (map.getLayer("fastest-route-lines-layer")) {
+        map.setLayoutProperty(
+          "fastest-route-lines-layer",
+          "visibility",
+          routeVisibility && showFastestOnMap ? "visible" : "none"
+        );
+      }
+      if (map.getLayer("route-points-layer")) {
+        map.setLayoutProperty(
+          "route-points-layer",
+          "visibility",
+          routeVisibility && (showShortestOnMap || showFastestOnMap)
+            ? "visible"
+            : "none"
+        );
+      }
+    });
+  }, [showHeatmapOnMap, showShortestOnMap, showFastestOnMap, mapInitTick]);
 
   useEffect(() => {
-    if (!mapRef.current) return;
-    const map = mapRef.current;
-    if (map.getLayer("shortest-route-lines-layer")) {
-      map.setLayoutProperty(
-        "shortest-route-lines-layer",
-        "visibility",
-        showShortestOnMap ? "visible" : "none"
-      );
-    }
-    if (map.getLayer("fastest-route-lines-layer")) {
-      map.setLayoutProperty(
-        "fastest-route-lines-layer",
-        "visibility",
-        showFastestOnMap ? "visible" : "none"
-      );
-    }
-    if (map.getLayer("route-points-layer")) {
-      map.setLayoutProperty(
-        "route-points-layer",
-        "visibility",
-        showShortestOnMap || showFastestOnMap ? "visible" : "none"
-      );
-    }
-  }, [showShortestOnMap, showFastestOnMap]);
-
-  useEffect(() => {
-    if (!mapRef.current || !bbox) return;
-    mapRef.current.fitBounds(
+    const maps = [heatMapRef.current, routeMapRef.current].filter(
+      (map): map is MapInstanceLike => map !== null
+    );
+    if (!maps.length || !bbox) return;
+    maps.forEach((map) =>
+      map.fitBounds(
       [
         [bbox.minLon, bbox.minLat],
         [bbox.maxLon, bbox.maxLat],
       ],
       { padding: 20, duration: 500 }
+      )
     );
-  }, [bbox]);
+  }, [bbox, mapInitTick]);
 
   useEffect(() => {
     if (!isPlaying || buckets.length <= 1) return;
@@ -546,7 +783,8 @@ function App() {
     setError(null);
     try {
       if (!capability?.ready) {
-        const issues = capability?.issues?.join("; ") || "routing capability is not ready";
+        const issues =
+          capability?.issues?.join("; ") || "routing capability is not ready";
         throw new Error(issues);
       }
       setRouteResult(await fetchRouteCompare(routePayload));
@@ -564,6 +802,15 @@ function App() {
     setRouteResult(null);
   };
 
+  const clearHeatmapLayer = () => {
+    setShowHeatmapOnMap(false);
+    setHeatData([]);
+  };
+
+  const restoreHeatmapLayer = () => {
+    setShowHeatmapOnMap(true);
+  };
+
   const routeOverlap = useMemo(() => {
     const s = routeResult?.shortest_route?.path_wkt_segments ?? [];
     const f = routeResult?.fastest_route?.path_wkt_segments ?? [];
@@ -572,292 +819,495 @@ function App() {
     return s.every((seg, i) => seg === f[i]);
   }, [routeResult]);
 
+  const routeErrorHint = useMemo(() => {
+    if (!error) return null;
+    if (error.toLowerCase().includes("no traversable path")) {
+      return "当前点位在路网断连区域，建议在 Route Map 使用 Pick Start/End 重新选到附近道路节点。";
+    }
+    return null;
+  }, [error]);
+
+  const navGroups = useMemo(() => {
+    return navItems.reduce<Record<string, typeof navItems>>((acc, item) => {
+      if (!acc[item.group]) acc[item.group] = [];
+      acc[item.group].push(item);
+      return acc;
+    }, {});
+  }, []);
+
   return (
-    <main className="page">
-      <header className="hero">
-        <div>
+    <main className="workspace">
+      <aside className="sidebar">
+        <div className="sidebar-brand">
           <p className="eyebrow">Harbin Vehicle Journey Analytics</p>
-          <h1>Urban Mobility Command Board</h1>
-          <p className="subtitle">
-            H5 + JLD2 merged pipeline, PostGIS-backed metrics, and route comparison
-            for shortest-distance versus fastest-time paths.
-          </p>
+          <h1>Workspace</h1>
+          <p className="sidebar-note">Click modules to focus one workflow at a time.</p>
         </div>
-      </header>
 
-      {error ? <section className="error">{error}</section> : null}
-      {loading ? <section className="loading">Loading backend data...</section> : null}
+        <nav className="sidebar-nav" aria-label="Dashboard modules">
+          {Object.entries(navGroups).map(([group, items]) => (
+            <div key={group} className="nav-group">
+              <p className="nav-group-title">{group}</p>
+              {items.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`nav-item ${activeSection === item.id ? "active" : ""}`}
+                  onClick={() => setActiveSection(item.id)}
+                >
+                  <span className="nav-icon" aria-hidden="true">
+                    {item.icon}
+                  </span>
+                  <span className="nav-copy">
+                    <span className="nav-title">{item.title}</span>
+                    <span className="nav-desc">{item.desc}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          ))}
+        </nav>
 
-      <section className="kpi-grid">
-        <article className="card">
-          <h2>Total Trips</h2>
-          <p>{kpis.tripCount.toLocaleString()}</p>
-        </article>
-        <article className="card">
-          <h2>Peak Daily Vehicles</h2>
-          <p>{kpis.vehicleCount.toLocaleString()}</p>
-        </article>
-        <article className="card">
-          <h2>Total Distance (km)</h2>
-          <p>{kpis.distanceKm.toFixed(2)}</p>
-        </article>
-      </section>
-
-      <section className="panel-grid">
-        <article className="panel">
-          <h3>Daily Trip Count</h3>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={tripSeries}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" />
-              <YAxis />
-              <Tooltip formatter={(value) => [`${tooltipValue(value)}`, "Trips"]} />
-              <Bar dataKey="value" fill="#22d3ee" />
-            </BarChart>
-          </ResponsiveContainer>
-        </article>
-        <article className="panel">
-          <h3>Daily Vehicle Count</h3>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={vehicleSeries}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" />
-              <YAxis />
-              <Tooltip formatter={(value) => [`${tooltipValue(value)}`, "Vehicles"]} />
-              <Bar dataKey="value" fill="#ffb74a" />
-            </BarChart>
-          </ResponsiveContainer>
-        </article>
-        <article className="panel">
-          <h3>Daily Distance</h3>
-          <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={distanceSeries}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" />
-              <YAxis />
-              <Tooltip formatter={(value) => [`${tooltipValue(value).toFixed(2)} km`, "Distance"]} />
-              <Line dataKey="value" stroke="#80ecff" strokeWidth={3} />
-            </LineChart>
-          </ResponsiveContainer>
-        </article>
-        <article className="panel">
-          <h3>Distance Boxplot</h3>
-          <BoxplotMini data={distanceBox} unit="m" />
-        </article>
-        <article className="panel">
-          <h3>Speed Boxplot</h3>
-          <BoxplotMini data={speedBox} unit="km/h" />
-        </article>
-        <article className="panel panel-wide">
-          <h3>Heatmap Playback</h3>
-          <div className="playback-controls">
-            <label>
-              Date
-              <select value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)}>
-                {["2015-01-03", "2015-01-04", "2015-01-05", "2015-01-06", "2015-01-07"].map((d) => (
-                  <option key={d} value={d}>
-                    {d}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Start Bucket
-              <input
-                type="number"
-                min={0}
-                max={Math.max(0, buckets.length - 1)}
-                value={bucketIndex}
-                onChange={(e) => setBucketIndex(Number(e.target.value))}
-              />
-            </label>
-            <button type="button" onClick={() => setIsPlaying((v) => !v)}>
-              {isPlaying ? "Pause" : "Play"}
+        <div className="theme-switch">
+          <span>Theme</span>
+          <div className="theme-buttons" role="group" aria-label="Theme switcher">
+            <button
+              type="button"
+              className={`theme-btn ${theme === "light" ? "active" : ""}`}
+              onClick={() => setTheme("light")}
+            >
+              Light
             </button>
             <button
               type="button"
-              onClick={() =>
-                setBbox({ minLat: 45.70, minLon: 126.55, maxLat: 45.82, maxLon: 126.75 })
-              }
+              className={`theme-btn ${theme === "dark" ? "active" : ""}`}
+              onClick={() => setTheme("dark")}
             >
-              Zoom Box
-            </button>
-            <button type="button" onClick={() => setBbox(null)}>
-              Reset Box
+              Dark
             </button>
           </div>
-          <div className="map-wrap">
-            <div className="map-head">Road Flow Heatmap (MapLibre GL)</div>
-            <div ref={mapContainerRef} className="map-canvas" />
-          </div>
-          <p className="bucket-tip">Current bucket: {buckets[bucketIndex] ?? "N/A"}</p>
-        </article>
-      </section>
+        </div>
+      </aside>
 
-      <section className="route-panel">
-        <h3>Route Compare</h3>
-        <p className="capability-line">
-          Route Capability: {capability?.ready ? "Ready" : "Not Ready"}
-          {capability?.edge_count !== undefined ? ` | Edges: ${capability.edge_count.toLocaleString()}` : ""}
-          {capability?.speed_bins_count !== undefined ? ` | Speed bins: ${capability.speed_bins_count.toLocaleString()}` : ""}
-        </p>
-        {capabilityError ? (
-          <div className="route-capability-issues">Capability check failed: {capabilityError}</div>
-        ) : null}
-        {!capability?.ready && capability?.issues?.length ? (
-          <div className="route-capability-issues">{capability.issues.join("; ")}</div>
-        ) : null}
-        <div className="inputs">
-          <label>
-            Start Time
-            <input
-              type="datetime-local"
-              value={routePayload.start_time.slice(0, 16)}
-              onChange={(e) =>
-                setRoutePayload((prev) => ({
-                  ...prev,
-                  start_time: e.target.value,
-                }))
-              }
-            />
-          </label>
-          <label>
-            Query Time
-            <input
-              type="datetime-local"
-              value={routePayload.query_time.slice(0, 16)}
-              onChange={(e) =>
-                setRoutePayload((prev) => ({
-                  ...prev,
-                  query_time: e.target.value,
-                }))
-              }
-            />
-          </label>
-          <label>
-            Start Lat
-            <input
-              type="number"
-              value={routePayload.start_point.lat}
-              onChange={(e) =>
-                setRoutePayload((prev) => ({
-                  ...prev,
-                  start_point: { ...prev.start_point, lat: Number(e.target.value) },
-                }))
-              }
-            />
-          </label>
-          <label>
-            Start Lon
-            <input
-              type="number"
-              value={routePayload.start_point.lon}
-              onChange={(e) =>
-                setRoutePayload((prev) => ({
-                  ...prev,
-                  start_point: { ...prev.start_point, lon: Number(e.target.value) },
-                }))
-              }
-            />
-          </label>
-          <label>
-            End Lat
-            <input
-              type="number"
-              value={routePayload.end_point.lat}
-              onChange={(e) =>
-                setRoutePayload((prev) => ({
-                  ...prev,
-                  end_point: { ...prev.end_point, lat: Number(e.target.value) },
-                }))
-              }
-            />
-          </label>
-          <label>
-            End Lon
-            <input
-              type="number"
-              value={routePayload.end_point.lon}
-              onChange={(e) =>
-                setRoutePayload((prev) => ({
-                  ...prev,
-                  end_point: { ...prev.end_point, lon: Number(e.target.value) },
-                }))
-              }
-            />
-          </label>
-        </div>
-        <p className="route-time-tip">
-          `Start Time` 用于记录本次路线请求时间；`Query Time` 用于命中 5 分钟速度桶。两者不同时，最快路可能变化，最短路通常不变。
-        </p>
-        <button onClick={onRunRoute} disabled={!capability?.ready}>Run Route Compare</button>
-        <div className="route-map-controls">
-          <span className="legend-title">Map Route Layers</span>
-          <label className="legend-item shortest">
-            <input
-              type="checkbox"
-              checked={showShortestOnMap}
-              onChange={(e) => setShowShortestOnMap(e.target.checked)}
-            />
-            Shortest (cyan dashed)
-          </label>
-          <label className="legend-item fastest">
-            <input
-              type="checkbox"
-              checked={showFastestOnMap}
-              onChange={(e) => setShowFastestOnMap(e.target.checked)}
-            />
-            Fastest (orange solid)
-          </label>
-          <button type="button" className="secondary-btn" onClick={clearRouteOnMap}>
-            Clear Route Layers
-          </button>
-          <button type="button" className="secondary-btn" onClick={clearRouteResult}>
-            Clear Route Result
-          </button>
-        </div>
-        {routeOverlap ? (
-          <p className="route-overlap-tip">
-            Shortest and fastest routes are identical at current query time.
+      <section className="content">
+        <header className="content-header">
+          <h2>{navItems.find((item) => item.id === activeSection)?.title}</h2>
+          <p>
+            H5 + JLD2 merged pipeline, PostGIS-backed metrics, and route comparison
+            for shortest-distance versus fastest-time paths.
           </p>
-        ) : null}
-        {routeResult ? (
-          <div className="route-result-grid">
-            <article className="route-card">
-              <h4>Shortest Route</h4>
-              <p>Total Distance: {(routeResult.shortest_route?.distance_m ?? 0).toFixed(2)} m</p>
-              <p>Total Time: {(routeResult.shortest_route?.estimated_time_s ?? 0).toFixed(2)} s</p>
-              <div className="route-edges">
-                {(Array.isArray(routeResult.shortest_route?.edges) ? routeResult.shortest_route?.edges : []).map((edge) => (
-                  <div key={`short-${edge.seq}-${edge.edge_id}`} className="route-edge-row" title={`road=${edge.road_id ?? "unknown"}, segDist=${edge.distance_m.toFixed(2)}m, segTime=${edge.estimated_time_s.toFixed(2)}s, cumDist=${edge.cumulative_distance_m.toFixed(2)}m, cumTime=${edge.cumulative_time_s.toFixed(2)}s`}>
-                    <span>#{edge.seq}</span>
-                    <span>edge {edge.edge_id}</span>
-                    <span>road {edge.road_id ?? "-"}</span>
-                    <span>{safeNum(edge.distance_m).toFixed(1)} m</span>
-                    <span>{safeNum(edge.estimated_time_s).toFixed(1)} s</span>
-                  </div>
-                ))}
-              </div>
-            </article>
+        </header>
 
-            <article className="route-card">
-              <h4>Fastest Route</h4>
-              <p>Total Distance: {(routeResult.fastest_route?.distance_m ?? 0).toFixed(2)} m</p>
-              <p>Total Time: {(routeResult.fastest_route?.estimated_time_s ?? 0).toFixed(2)} s</p>
-              <div className="route-edges">
-                {(Array.isArray(routeResult.fastest_route?.edges) ? routeResult.fastest_route?.edges : []).map((edge) => (
-                  <div key={`fast-${edge.seq}-${edge.edge_id}`} className="route-edge-row" title={`road=${edge.road_id ?? "unknown"}, segDist=${edge.distance_m.toFixed(2)}m, segTime=${edge.estimated_time_s.toFixed(2)}s, cumDist=${edge.cumulative_distance_m.toFixed(2)}m, cumTime=${edge.cumulative_time_s.toFixed(2)}s`}>
-                    <span>#{edge.seq}</span>
-                    <span>edge {edge.edge_id}</span>
-                    <span>road {edge.road_id ?? "-"}</span>
-                    <span>{safeNum(edge.distance_m).toFixed(1)} m</span>
-                    <span>{safeNum(edge.estimated_time_s).toFixed(1)} s</span>
-                  </div>
-                ))}
-              </div>
-            </article>
-          </div>
+        {error ? <section className="error">{error}</section> : null}
+        {routeErrorHint ? <section className="loading">{routeErrorHint}</section> : null}
+        {loading ? <section className="loading">Loading backend data...</section> : null}
+
+        <div key={activeSection} className="panel-fade">
+        {activeSection === "overview" ? (
+          <>
+            <section className="kpi-grid">
+              <article className="card">
+                <h3>Total Trips</h3>
+                <p>{kpis.tripCount.toLocaleString()}</p>
+              </article>
+              <article className="card">
+                <h3>Peak Daily Vehicles</h3>
+                <p>{kpis.vehicleCount.toLocaleString()}</p>
+              </article>
+              <article className="card">
+                <h3>Total Distance (km)</h3>
+                <p>{kpis.distanceKm.toFixed(2)}</p>
+              </article>
+            </section>
+
+            <section className="panel-grid">
+              <article className="panel">
+                <h4>Daily Trip Count</h4>
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={tripSeries}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
+                    <XAxis dataKey="date" stroke="var(--chart-axis)" />
+                    <YAxis stroke="var(--chart-axis)" />
+                    <Tooltip
+                      formatter={(value) => [`${tooltipValue(value)}`, "Trips"]}
+                      {...tooltipTheme}
+                    />
+                    <Bar dataKey="value" fill="var(--chart-cyan)" radius={[8, 8, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </article>
+              <article className="panel">
+                <h4>Daily Vehicle Count</h4>
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={vehicleSeries}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
+                    <XAxis dataKey="date" stroke="var(--chart-axis)" />
+                    <YAxis stroke="var(--chart-axis)" />
+                    <Tooltip
+                      formatter={(value) => [`${tooltipValue(value)}`, "Vehicles"]}
+                      {...tooltipTheme}
+                    />
+                    <Bar
+                      dataKey="value"
+                      fill="var(--chart-amber)"
+                      radius={[8, 8, 0, 0]}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </article>
+              <article className="panel panel-wide">
+                <h4>Daily Distance</h4>
+                <ResponsiveContainer width="100%" height={280}>
+                  <LineChart data={distanceSeries}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
+                    <XAxis dataKey="date" stroke="var(--chart-axis)" />
+                    <YAxis stroke="var(--chart-axis)" />
+                    <Tooltip
+                      formatter={(value) => [`${tooltipValue(value).toFixed(2)} km`, "Distance"]}
+                      {...tooltipTheme}
+                    />
+                    <Line
+                      dataKey="value"
+                      stroke="var(--chart-cyan)"
+                      strokeWidth={3}
+                      dot={false}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </article>
+            </section>
+
+            <section className="panel-grid single-mode">
+              <article className="panel">
+                <h4>Distance Boxplot</h4>
+                <BoxplotMini data={distanceBox} unit="m" />
+              </article>
+              <article className="panel">
+                <h4>Speed Boxplot</h4>
+                <BoxplotMini data={speedBox} unit="km/h" />
+              </article>
+            </section>
+          </>
         ) : null}
+
+        {activeSection === "heatmap" ? (
+          <section className="panel">
+            <h4>Heatmap Playback</h4>
+            <div className="playback-controls">
+              <label>
+                Date
+                <select
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                >
+                  {["2015-01-03", "2015-01-04", "2015-01-05", "2015-01-06", "2015-01-07"].map(
+                    (d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    )
+                  )}
+                </select>
+              </label>
+              <label>
+                Start Bucket
+                <input
+                  type="number"
+                  min={0}
+                  max={Math.max(0, buckets.length - 1)}
+                  value={bucketIndex}
+                  onChange={(e) => setBucketIndex(Number(e.target.value))}
+                />
+              </label>
+              <button type="button" onClick={() => setIsPlaying((v) => !v)}>
+                {isPlaying ? "Pause" : "Play"}
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setBbox({ minLat: 45.7, minLon: 126.55, maxLat: 45.82, maxLon: 126.75 })
+                }
+              >
+                Zoom Box
+              </button>
+              <button type="button" onClick={() => setBbox(null)}>
+                Reset Box
+              </button>
+            </div>
+
+            <div className="heatmap-toolbar">
+              <div className="heat-legend" aria-label="Heatmap flow legend">
+                <span className="legend-chip smooth">Smooth</span>
+                <span className="legend-chip busy">Busy</span>
+                <span className="legend-chip congested">Congested</span>
+              </div>
+              {showHeatmapOnMap ? (
+                <button type="button" className="secondary-btn" onClick={clearHeatmapLayer}>
+                  Clear Heatmap
+                </button>
+              ) : (
+                <button type="button" className="secondary-btn" onClick={restoreHeatmapLayer}>
+                  Restore Heatmap
+                </button>
+              )}
+            </div>
+
+            <div className="map-wrap">
+              <div className="map-head">Road Flow Heatmap (MapLibre GL)</div>
+              <div ref={heatMapContainerRef} className="map-canvas" />
+            </div>
+            <p className="bucket-tip">Current bucket: {buckets[bucketIndex] ?? "N/A"}</p>
+          </section>
+        ) : null}
+
+        {activeSection === "route" ? (
+          <section className="route-panel">
+            <h4>Route Compare</h4>
+            <p className="capability-line">
+              Route Capability: {capability?.ready ? "Ready" : "Not Ready"}
+              {capability?.edge_count !== undefined
+                ? ` | Edges: ${capability.edge_count.toLocaleString()}`
+                : ""}
+              {capability?.speed_bins_count !== undefined
+                ? ` | Speed bins: ${capability.speed_bins_count.toLocaleString()}`
+                : ""}
+            </p>
+            {capabilityError ? (
+              <div className="route-capability-issues">
+                Capability check failed: {capabilityError}
+              </div>
+            ) : null}
+            {!capability?.ready && capability?.issues?.length ? (
+              <div className="route-capability-issues">{capability.issues.join("; ")}</div>
+            ) : null}
+
+            <div className="inputs">
+              <label>
+                Start Time
+                <input
+                  type="datetime-local"
+                  value={routePayload.start_time.slice(0, 16)}
+                  onChange={(e) =>
+                    setRoutePayload((prev) => ({
+                      ...prev,
+                      start_time: e.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label>
+                Query Time
+                <input
+                  type="datetime-local"
+                  value={routePayload.query_time.slice(0, 16)}
+                  onChange={(e) =>
+                    setRoutePayload((prev) => ({
+                      ...prev,
+                      query_time: e.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label>
+                Start Lat
+                <input
+                  type="number"
+                  value={routePayload.start_point.lat}
+                  onChange={(e) =>
+                    setRoutePayload((prev) => ({
+                      ...prev,
+                      start_point: { ...prev.start_point, lat: Number(e.target.value) },
+                    }))
+                  }
+                />
+              </label>
+              <label>
+                Start Lon
+                <input
+                  type="number"
+                  value={routePayload.start_point.lon}
+                  onChange={(e) =>
+                    setRoutePayload((prev) => ({
+                      ...prev,
+                      start_point: { ...prev.start_point, lon: Number(e.target.value) },
+                    }))
+                  }
+                />
+              </label>
+              <label>
+                End Lat
+                <input
+                  type="number"
+                  value={routePayload.end_point.lat}
+                  onChange={(e) =>
+                    setRoutePayload((prev) => ({
+                      ...prev,
+                      end_point: { ...prev.end_point, lat: Number(e.target.value) },
+                    }))
+                  }
+                />
+              </label>
+              <label>
+                End Lon
+                <input
+                  type="number"
+                  value={routePayload.end_point.lon}
+                  onChange={(e) =>
+                    setRoutePayload((prev) => ({
+                      ...prev,
+                      end_point: { ...prev.end_point, lon: Number(e.target.value) },
+                    }))
+                  }
+                />
+              </label>
+            </div>
+
+            <p className="route-time-tip">
+              `Start Time` is request context time; `Query Time` targets 5-minute speed
+              bins. When query time changes, fastest routes may change.
+            </p>
+            {routeResult?.snapped_start_point && routeResult?.snapped_end_point ? (
+              <p className="route-time-tip">
+                Snapped Start: node {routeResult.snapped_start_point.node_id} at (
+                {routeResult.snapped_start_point.lat.toFixed(6)},{" "}
+                {routeResult.snapped_start_point.lon.toFixed(6)}) | dist{" "}
+                {routeResult.snapped_start_point.snap_distance_m.toFixed(1)} m; Snapped End:
+                node {routeResult.snapped_end_point.node_id} at (
+                {routeResult.snapped_end_point.lat.toFixed(6)},{" "}
+                {routeResult.snapped_end_point.lon.toFixed(6)}) | dist{" "}
+                {routeResult.snapped_end_point.snap_distance_m.toFixed(1)} m.
+              </p>
+            ) : null}
+            <button onClick={onRunRoute} disabled={!capability?.ready}>
+              Run Route Compare
+            </button>
+
+            <div className="route-map-controls">
+              <span className="legend-title">Map Route Layers</span>
+              <label className="legend-item shortest">
+                <input
+                  type="checkbox"
+                  checked={showShortestOnMap}
+                  onChange={(e) => setShowShortestOnMap(e.target.checked)}
+                />
+                Shortest (cyan dashed)
+              </label>
+              <label className="legend-item fastest">
+                <input
+                  type="checkbox"
+                  checked={showFastestOnMap}
+                  onChange={(e) => setShowFastestOnMap(e.target.checked)}
+                />
+                Fastest (orange solid)
+              </label>
+              <button type="button" className="secondary-btn" onClick={clearRouteOnMap}>
+                Clear Route Layers
+              </button>
+              <button
+                type="button"
+                className="secondary-btn"
+                onClick={clearRouteResult}
+              >
+                Clear Route Result
+              </button>
+            </div>
+
+            <div className="route-pick-controls">
+              <span className="legend-title">Map Point Picker</span>
+              <button
+                type="button"
+                className={`secondary-btn ${routePickMode === "start" ? "active-mode" : ""}`}
+                onClick={() =>
+                  setRoutePickMode((prev) => (prev === "start" ? "none" : "start"))
+                }
+              >
+                Pick Start Point
+              </button>
+              <button
+                type="button"
+                className={`secondary-btn ${routePickMode === "end" ? "active-mode" : ""}`}
+                onClick={() =>
+                  setRoutePickMode((prev) => (prev === "end" ? "none" : "end"))
+                }
+              >
+                Pick End Point
+              </button>
+              <span className="pick-tip">
+                {routePickMode === "none"
+                  ? "Choose a mode, then click on map to fill coordinates"
+                  : routePickMode === "start"
+                    ? "Picking START point: click on map"
+                    : "Picking END point: click on map"}
+              </span>
+            </div>
+
+            <div className="map-wrap">
+              <div className="map-head">Route Compare Map (MapLibre GL)</div>
+              <div ref={routeMapContainerRef} className="map-canvas" />
+            </div>
+
+            {routeOverlap ? (
+              <p className="route-overlap-tip">
+                Shortest and fastest routes are identical at current query time.
+              </p>
+            ) : null}
+
+            {routeResult ? (
+              <div className="route-result-grid">
+                <article className="route-card">
+                  <h5>Shortest Route</h5>
+                  <p>
+                    Total Distance: {(routeResult.shortest_route?.distance_m ?? 0).toFixed(2)} m
+                  </p>
+                  <p>
+                    Total Time: {(routeResult.shortest_route?.estimated_time_s ?? 0).toFixed(2)} s
+                  </p>
+                  <div className="route-edges">
+                    {((routeResult.shortest_route?.edges ?? [])).map((edge) => (
+                      <div
+                        key={`short-${edge.seq}-${edge.edge_id}`}
+                        className="route-edge-row"
+                        title={`road=${edge.road_id ?? "unknown"}, segDist=${edge.distance_m.toFixed(2)}m, segTime=${edge.estimated_time_s.toFixed(2)}s, cumDist=${edge.cumulative_distance_m.toFixed(2)}m, cumTime=${edge.cumulative_time_s.toFixed(2)}s`}
+                      >
+                        <span>#{edge.seq}</span>
+                        <span>edge {edge.edge_id}</span>
+                        <span>road {edge.road_id ?? "-"}</span>
+                        <span>{safeNum(edge.distance_m).toFixed(1)} m</span>
+                        <span>{safeNum(edge.estimated_time_s).toFixed(1)} s</span>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+
+                <article className="route-card">
+                  <h5>Fastest Route</h5>
+                  <p>
+                    Total Distance: {(routeResult.fastest_route?.distance_m ?? 0).toFixed(2)} m
+                  </p>
+                  <p>
+                    Total Time: {(routeResult.fastest_route?.estimated_time_s ?? 0).toFixed(2)} s
+                  </p>
+                  <div className="route-edges">
+                    {((routeResult.fastest_route?.edges ?? [])).map((edge) => (
+                      <div
+                        key={`fast-${edge.seq}-${edge.edge_id}`}
+                        className="route-edge-row"
+                        title={`road=${edge.road_id ?? "unknown"}, segDist=${edge.distance_m.toFixed(2)}m, segTime=${edge.estimated_time_s.toFixed(2)}s, cumDist=${edge.cumulative_distance_m.toFixed(2)}m, cumTime=${edge.cumulative_time_s.toFixed(2)}s`}
+                      >
+                        <span>#{edge.seq}</span>
+                        <span>edge {edge.edge_id}</span>
+                        <span>road {edge.road_id ?? "-"}</span>
+                        <span>{safeNum(edge.distance_m).toFixed(1)} m</span>
+                        <span>{safeNum(edge.estimated_time_s).toFixed(1)} s</span>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
+        </div>
       </section>
     </main>
   );

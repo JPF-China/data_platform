@@ -140,6 +140,11 @@ def test_route_compare_prefers_pgrouting_result():
         shortest = result.shortest_route
         fastest = result.fastest_route
 
+        assert result.snapped_start_point.node_id == result.nearest_start_node
+        assert result.snapped_end_point.node_id == result.nearest_end_node
+        assert result.snapped_start_point.snap_distance_m >= 0
+        assert result.snapped_end_point.snap_distance_m >= 0
+
         assert shortest.weight == "distance_m"
         assert fastest.weight == "travel_time_s"
 
@@ -185,6 +190,9 @@ def test_route_edges_are_continuous_and_cumulative_values_increase():
                 assert edge.cumulative_time_s > previous_time
                 previous_distance = edge.cumulative_distance_m
                 previous_time = edge.cumulative_time_s
+
+        assert result.snapped_start_point.node_id > 0
+        assert result.snapped_end_point.node_id > 0
     finally:
         db.close()
 
