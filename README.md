@@ -4,7 +4,9 @@ Urban Mobility Command Board for Harbin vehicle trajectory analytics.
 
 ## V1 Screenshot
 
-![V1 Dashboard](frontend/src/assets/hero.png)
+![P1](frontend/src/assets/P1.png)
+![P2](frontend/src/assets/P2.png)
+![P3](frontend/src/assets/P3.png)
 
 ## Core Capabilities
 
