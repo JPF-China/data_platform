@@ -1,10 +1,10 @@
-# 后端（FastAPI）
+# 后端说明（FastAPI）
 
 ## 1. 环境
 
-- Python: `/Users/apple/python_data/bin/python`
-- Package manager: `uv`
-- Database: local PostgreSQL + PostGIS (`harbin_traffic`)
+- Python：建议 3.11+
+- 包管理：`uv`
+- 数据库：PostgreSQL + PostGIS + pgRouting
 
 ## 2. 安装依赖
 
@@ -15,99 +15,45 @@ uv sync
 ## 3. 初始化数据库
 
 ```bash
-/opt/homebrew/opt/postgresql@18/bin/psql -d harbin_traffic -f ../infra/postgres/bootstrap.sql
+psql "postgresql://postgres:postgres@localhost:5432/harbin_traffic" -f ../infra/postgres/bootstrap.sql
 ```
 
-## 4. 入仓流程
-
-当前入仓逻辑为文件级并行入仓，直接写入 PostgreSQL 明细表：
-
-1. Truncate rebuild tables.
-2. Dispatch source files in parallel workers (`data/*.h5`, optional matching `jldpath/*.jld2`).
-3. Each worker opens one source file and performs chunked `COPY` writes (default `50_000` rows per chunk).
-
-PostgreSQL/PostGIS 是在线主存储，不需要 CSV/Parquet 中间层。
-
-路由链路固定顺序：`ingest -> 路网入仓模块 -> compute -> stats -> route search`。
-其中热力图和 `road_speed_bins` 依赖路网入仓模块完成后再刷新。
-
-### 4.1 运行模式
-
-- `ingest`：只执行入仓编排（只清理明细层，不清理统计表和路径依赖表）。
-- `rebuild`：总编排（入仓 + 路网入仓模块 + 统计刷新 + 路径能力准备 + 运行链路校验提示）。
-- `optimize`：不入仓，只做数据库优化。
-- `compute`：只刷新统计表（要求路网和映射已可用）。
-- `smoke`：只验证统计和接口，不扫描大表。
-
-仅计算统计（默认，不重新入仓）：
+## 4. 启动 API
 
 ```bash
-.venv/bin/python -m app.etl.load_data --base-dir /Users/apple/data_platform --mode compute
+uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-重建模式（清表 + 并行分块入仓 + 统计刷新）：
+## 5. 入仓流程
+
+入仓链路为文件级并行写入 PostgreSQL：
+
+1. 清理重建目标表（按模式执行）
+2. 并行分发源文件（`data/*.h5`，可选匹配 `jldpath/*.jld2`）
+3. 每个 worker 以分块 `COPY` 写入（默认每块 50_000 行）
+
+固定顺序：`ingest -> 路网入仓模块 -> stats -> route search`
+
+## 6. 常用运行模式
+
+- `ingest`：仅入仓编排
+- `rebuild`：入仓 + 路网入仓模块 + 统计刷新 + 路径能力准备
+- `optimize`：仅数据库优化
+- `compute`：仅刷新统计
+- `smoke`：只做轻量验证
+
+示例：
 
 ```bash
-.venv/bin/python -m app.etl.load_data --base-dir /Users/apple/data_platform --mode rebuild
+uv run python -m app.etl.load_data --base-dir /Users/apple/data_platform --mode rebuild
 ```
 
-说明：`ingest` 仅清理入仓明细表；`rebuild` 会按固定顺序执行路网和映射，再刷新统计并准备路径搜索依赖。
-
-仅入仓模式（清表 + 并行分块入仓 + 索引重建 + analyze）：
-
-```bash
-.venv/bin/python -m app.etl.load_data --base-dir /Users/apple/data_platform --mode ingest
-```
-
-小规模试跑：
-
-```bash
-.venv/bin/python -m app.etl.load_data --base-dir /Users/apple/data_platform --mode rebuild --max-trips 20
-```
-
-自定义 chunk / worker：
-
-```bash
-.venv/bin/python -m app.etl.load_data --base-dir /Users/apple/data_platform --mode rebuild --chunk-size 50000 --workers 4
-```
-
-trip upsert 批大小调整：
-
-```bash
-.venv/bin/python -m app.etl.load_data --base-dir /Users/apple/data_platform --mode ingest --chunk-size 200000 --workers 5 --trip-upsert-batch-size 200
-```
-
-完整重建：
-
-```bash
-.venv/bin/python -m app.etl.load_data --base-dir /Users/apple/data_platform --mode rebuild
-```
-
-## 5. 回归策略
-
-- 默认回归（`make test`、CI）不能执行入仓。
-- 入仓相关检查单独作为运维任务或手工检查。
-
-## 6. 冒烟检查
-
-- Quick smoke run (compute semantics, no ingest):
-
-```bash
-make smoke
-```
-
-## 7. 启动 API
-
-```bash
-.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
-```
-
-## 8. 主要接口
+## 7. 主要接口
 
 - `GET /healthz`
 - `GET /api/v1/summary/daily`
-- `GET /api/v1/map/heatmap?metric_date=2015-01-03`
-- `GET /api/v1/map/heatmap/buckets?metric_date=2015-01-03`
+- `GET /api/v1/map/heatmap`
+- `GET /api/v1/map/heatmap/buckets`
 - `GET /api/v1/chart/daily-trip-count`
 - `GET /api/v1/chart/daily-vehicle-count`
 - `GET /api/v1/chart/daily-distance`
@@ -115,30 +61,16 @@ make smoke
 - `GET /api/v1/chart/daily-speed-boxplot`
 - `POST /api/v1/route/compare`
 
-`/api/v1/route/compare` 请求体需同时提供 `start_time` 与 `query_time`，前者表示行程起始时刻，后者用于命中 `road_speed_bins` 的 5 分钟速度桶。
-
-`/api/v1/route/compare` 会在搜索前自动将输入起终点吸附到最近路网节点，并在响应中返回：
-
-- `start_time`、`query_time`、`query_bucket_start`
-- `nearest_start_node`、`nearest_end_node`
-- `route_start_node`、`route_end_node`
-- `shortest_route`、`fastest_route`
-
-- `snapped_start_point`：`lat`、`lon`、`node_id`、`snap_distance_m`
-- `snapped_end_point`：`lat`、`lon`、`node_id`、`snap_distance_m`
-
-## 9. 回归测试
-
-- Run all backend tests:
+## 8. 测试
 
 ```bash
 uv sync --group dev
 uv run pytest -q
 ```
 
-## 10. 文档入口
+## 9. 文档入口
 
-- 主设计总纲：`../spec.md`
-- 实施版总纲：`../implementation_guide.md`
-- 运行上下文：`../project_context.md`
-- pgRouting 环境与专项测试：`../docs/pgrouting_environment.md`
+- `../spec.md`
+- `../implementation_guide.md`
+- `../project_context.md`
+- `../docs/pgrouting_environment.md`

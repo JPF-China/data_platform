@@ -91,11 +91,11 @@ const tooltipTheme = {
 
 function BoxplotMini({ data, unit }: { data: BoxRow[]; unit: string }) {
   const [hoverText, setHoverText] = useState<string>("");
-  if (!data.length) return <div className="empty">No boxplot data</div>;
+  if (!data.length) return <div className="empty">暂无箱线图数据</div>;
   const all = data
     .flatMap((d) => [d.min_value, d.q1, d.median, d.q3, d.max_value])
     .filter((v) => Number.isFinite(v));
-  if (!all.length) return <div className="empty">No boxplot data</div>;
+  if (!all.length) return <div className="empty">暂无箱线图数据</div>;
   const min = Math.min(...all);
   const max = Math.max(...all);
   const height = 210;
@@ -176,7 +176,7 @@ function BoxplotMini({ data, unit }: { data: BoxRow[]; unit: string }) {
         })}
       </svg>
       <div className="boxplot-hover">
-        {hoverText || "Hover a box to see exact values"}
+        {hoverText || "悬停箱体可查看精确数值"}
       </div>
     </div>
   );
@@ -198,24 +198,24 @@ const navItems: Array<{
 }> = [
   {
     id: "overview",
-    title: "Overview",
-    desc: "Core KPIs, trends and boxplots",
+    title: "总览",
+    desc: "核心指标、趋势与箱线图",
     icon: "OV",
-    group: "Analytics",
+    group: "分析",
   },
   {
     id: "heatmap",
-    title: "Heatmap Playback",
-    desc: "Road flow time buckets",
+    title: "热力回放",
+    desc: "道路流量时间桶",
     icon: "HM",
-    group: "Analytics",
+    group: "分析",
   },
   {
     id: "route",
-    title: "Route Compare",
-    desc: "Shortest vs fastest path",
+    title: "路径对比",
+    desc: "最短路与最快路",
     icon: "RT",
-    group: "Routing",
+    group: "路径",
   },
 ];
 
@@ -295,7 +295,7 @@ function App() {
         setSpeedBox(sb);
         setDistanceBox(db);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to load API data");
+        setError(e instanceof Error ? e.message : "加载接口数据失败");
       } finally {
         setLoading(false);
       }
@@ -310,7 +310,7 @@ function App() {
         setCapability(await fetchRouteCapability());
       } catch (e) {
         setCapabilityError(
-          e instanceof Error ? e.message : "Failed to load route capability"
+          e instanceof Error ? e.message : "加载路径能力信息失败"
         );
       }
     };
@@ -563,7 +563,7 @@ function App() {
         setBuckets(items);
         setBucketIndex(0);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to load heatmap buckets");
+        setError(e instanceof Error ? e.message : "加载热力时间桶失败");
       }
     };
     void run();
@@ -585,7 +585,7 @@ function App() {
           })
         );
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to load heatmap data");
+        setError(e instanceof Error ? e.message : "加载热力图数据失败");
       }
     };
     void run();
@@ -784,12 +784,12 @@ function App() {
     try {
       if (!capability?.ready) {
         const issues =
-          capability?.issues?.join("; ") || "routing capability is not ready";
+          capability?.issues?.join("; ") || "路径能力未就绪";
         throw new Error(issues);
       }
       setRouteResult(await fetchRouteCompare(routePayload));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Route API failed");
+      setError(e instanceof Error ? e.message : "路径对比接口调用失败");
     }
   };
 
@@ -822,7 +822,7 @@ function App() {
   const routeErrorHint = useMemo(() => {
     if (!error) return null;
     if (error.toLowerCase().includes("no traversable path")) {
-      return "当前点位在路网断连区域，建议在 Route Map 使用 Pick Start/End 重新选到附近道路节点。";
+      return "当前点位在路网断连区域，建议在路径地图中使用“选择起点/选择终点”重新选点到附近道路节点。";
     }
     return null;
   }, [error]);
@@ -839,12 +839,12 @@ function App() {
     <main className="workspace">
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <p className="eyebrow">Harbin Vehicle Journey Analytics</p>
-          <h1>Workspace</h1>
-          <p className="sidebar-note">Click modules to focus one workflow at a time.</p>
+          <p className="eyebrow">哈尔滨车辆行程分析平台</p>
+          <h1>工作台</h1>
+          <p className="sidebar-note">点击左侧模块，聚焦单一业务流程。</p>
         </div>
 
-        <nav className="sidebar-nav" aria-label="Dashboard modules">
+        <nav className="sidebar-nav" aria-label="仪表盘模块导航">
           {Object.entries(navGroups).map(([group, items]) => (
             <div key={group} className="nav-group">
               <p className="nav-group-title">{group}</p>
@@ -869,21 +869,21 @@ function App() {
         </nav>
 
         <div className="theme-switch">
-          <span>Theme</span>
-          <div className="theme-buttons" role="group" aria-label="Theme switcher">
+          <span>主题</span>
+          <div className="theme-buttons" role="group" aria-label="主题切换">
             <button
               type="button"
               className={`theme-btn ${theme === "light" ? "active" : ""}`}
               onClick={() => setTheme("light")}
             >
-              Light
+              浅色
             </button>
             <button
               type="button"
               className={`theme-btn ${theme === "dark" ? "active" : ""}`}
               onClick={() => setTheme("dark")}
             >
-              Dark
+              深色
             </button>
           </div>
         </div>
@@ -893,43 +893,42 @@ function App() {
         <header className="content-header">
           <h2>{navItems.find((item) => item.id === activeSection)?.title}</h2>
           <p>
-            H5 + JLD2 merged pipeline, PostGIS-backed metrics, and route comparison
-            for shortest-distance versus fastest-time paths.
+            基于 H5 + JLD2 合并入仓，依托 PostGIS 统计能力，支持最短路与最快路的路径对比。
           </p>
         </header>
 
         {error ? <section className="error">{error}</section> : null}
         {routeErrorHint ? <section className="loading">{routeErrorHint}</section> : null}
-        {loading ? <section className="loading">Loading backend data...</section> : null}
+        {loading ? <section className="loading">正在加载后端数据...</section> : null}
 
         <div key={activeSection} className="panel-fade">
         {activeSection === "overview" ? (
           <>
             <section className="kpi-grid">
               <article className="card">
-                <h3>Total Trips</h3>
+                <h3>总行程数</h3>
                 <p>{kpis.tripCount.toLocaleString()}</p>
               </article>
               <article className="card">
-                <h3>Peak Daily Vehicles</h3>
+                <h3>单日峰值车辆数</h3>
                 <p>{kpis.vehicleCount.toLocaleString()}</p>
               </article>
               <article className="card">
-                <h3>Total Distance (km)</h3>
+                <h3>总里程（km）</h3>
                 <p>{kpis.distanceKm.toFixed(2)}</p>
               </article>
             </section>
 
             <section className="panel-grid">
               <article className="panel">
-                <h4>Daily Trip Count</h4>
+                <h4>每日行程数</h4>
                 <ResponsiveContainer width="100%" height={260}>
                   <BarChart data={tripSeries}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
                     <XAxis dataKey="date" stroke="var(--chart-axis)" />
                     <YAxis stroke="var(--chart-axis)" />
                     <Tooltip
-                      formatter={(value) => [`${tooltipValue(value)}`, "Trips"]}
+                      formatter={(value) => [`${tooltipValue(value)}`, "行程数"]}
                       {...tooltipTheme}
                     />
                     <Bar dataKey="value" fill="var(--chart-cyan)" radius={[8, 8, 0, 0]} />
@@ -937,14 +936,14 @@ function App() {
                 </ResponsiveContainer>
               </article>
               <article className="panel">
-                <h4>Daily Vehicle Count</h4>
+                <h4>每日车辆数</h4>
                 <ResponsiveContainer width="100%" height={260}>
                   <BarChart data={vehicleSeries}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
                     <XAxis dataKey="date" stroke="var(--chart-axis)" />
                     <YAxis stroke="var(--chart-axis)" />
                     <Tooltip
-                      formatter={(value) => [`${tooltipValue(value)}`, "Vehicles"]}
+                      formatter={(value) => [`${tooltipValue(value)}`, "车辆数"]}
                       {...tooltipTheme}
                     />
                     <Bar
@@ -956,14 +955,14 @@ function App() {
                 </ResponsiveContainer>
               </article>
               <article className="panel panel-wide">
-                <h4>Daily Distance</h4>
+                <h4>每日里程</h4>
                 <ResponsiveContainer width="100%" height={280}>
                   <LineChart data={distanceSeries}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
                     <XAxis dataKey="date" stroke="var(--chart-axis)" />
                     <YAxis stroke="var(--chart-axis)" />
                     <Tooltip
-                      formatter={(value) => [`${tooltipValue(value).toFixed(2)} km`, "Distance"]}
+                      formatter={(value) => [`${tooltipValue(value).toFixed(2)} km`, "里程"]}
                       {...tooltipTheme}
                     />
                     <Line
@@ -979,11 +978,11 @@ function App() {
 
             <section className="panel-grid single-mode">
               <article className="panel">
-                <h4>Distance Boxplot</h4>
+                <h4>里程箱线图</h4>
                 <BoxplotMini data={distanceBox} unit="m" />
               </article>
               <article className="panel">
-                <h4>Speed Boxplot</h4>
+                <h4>速度箱线图</h4>
                 <BoxplotMini data={speedBox} unit="km/h" />
               </article>
             </section>
@@ -992,10 +991,10 @@ function App() {
 
         {activeSection === "heatmap" ? (
           <section className="panel">
-            <h4>Heatmap Playback</h4>
+            <h4>热力图回放</h4>
             <div className="playback-controls">
               <label>
-                Date
+                日期
                 <select
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
@@ -1010,7 +1009,7 @@ function App() {
                 </select>
               </label>
               <label>
-                Start Bucket
+                起始时间桶
                 <input
                   type="number"
                   min={0}
@@ -1020,7 +1019,7 @@ function App() {
                 />
               </label>
               <button type="button" onClick={() => setIsPlaying((v) => !v)}>
-                {isPlaying ? "Pause" : "Play"}
+                {isPlaying ? "暂停" : "播放"}
               </button>
               <button
                 type="button"
@@ -1028,53 +1027,53 @@ function App() {
                   setBbox({ minLat: 45.7, minLon: 126.55, maxLat: 45.82, maxLon: 126.75 })
                 }
               >
-                Zoom Box
+                缩放到框选范围
               </button>
               <button type="button" onClick={() => setBbox(null)}>
-                Reset Box
+                重置范围
               </button>
             </div>
 
             <div className="heatmap-toolbar">
-              <div className="heat-legend" aria-label="Heatmap flow legend">
-                <span className="legend-chip smooth">Smooth</span>
-                <span className="legend-chip busy">Busy</span>
-                <span className="legend-chip congested">Congested</span>
+              <div className="heat-legend" aria-label="热力图流量图例">
+                <span className="legend-chip smooth">畅通</span>
+                <span className="legend-chip busy">繁忙</span>
+                <span className="legend-chip congested">拥堵</span>
               </div>
               {showHeatmapOnMap ? (
                 <button type="button" className="secondary-btn" onClick={clearHeatmapLayer}>
-                  Clear Heatmap
+                  清空热力图
                 </button>
               ) : (
                 <button type="button" className="secondary-btn" onClick={restoreHeatmapLayer}>
-                  Restore Heatmap
+                  恢复热力图
                 </button>
               )}
             </div>
 
             <div className="map-wrap">
-              <div className="map-head">Road Flow Heatmap (MapLibre GL)</div>
+              <div className="map-head">道路流量热力图（MapLibre GL）</div>
               <div ref={heatMapContainerRef} className="map-canvas" />
             </div>
-            <p className="bucket-tip">Current bucket: {buckets[bucketIndex] ?? "N/A"}</p>
+            <p className="bucket-tip">当前时间桶：{buckets[bucketIndex] ?? "暂无"}</p>
           </section>
         ) : null}
 
         {activeSection === "route" ? (
           <section className="route-panel">
-            <h4>Route Compare</h4>
+            <h4>路径对比</h4>
             <p className="capability-line">
-              Route Capability: {capability?.ready ? "Ready" : "Not Ready"}
+              路径能力：{capability?.ready ? "已就绪" : "未就绪"}
               {capability?.edge_count !== undefined
-                ? ` | Edges: ${capability.edge_count.toLocaleString()}`
+                  ? ` | 边数量：${capability.edge_count.toLocaleString()}`
                 : ""}
               {capability?.speed_bins_count !== undefined
-                ? ` | Speed bins: ${capability.speed_bins_count.toLocaleString()}`
+                  ? ` | 速度桶：${capability.speed_bins_count.toLocaleString()}`
                 : ""}
             </p>
             {capabilityError ? (
               <div className="route-capability-issues">
-                Capability check failed: {capabilityError}
+                能力检查失败：{capabilityError}
               </div>
             ) : null}
             {!capability?.ready && capability?.issues?.length ? (
@@ -1083,7 +1082,7 @@ function App() {
 
             <div className="inputs">
               <label>
-                Start Time
+                起始时间
                 <input
                   type="datetime-local"
                   value={routePayload.start_time.slice(0, 16)}
@@ -1096,7 +1095,7 @@ function App() {
                 />
               </label>
               <label>
-                Query Time
+                查询时间
                 <input
                   type="datetime-local"
                   value={routePayload.query_time.slice(0, 16)}
@@ -1109,7 +1108,7 @@ function App() {
                 />
               </label>
               <label>
-                Start Lat
+                起点纬度
                 <input
                   type="number"
                   value={routePayload.start_point.lat}
@@ -1122,7 +1121,7 @@ function App() {
                 />
               </label>
               <label>
-                Start Lon
+                起点经度
                 <input
                   type="number"
                   value={routePayload.start_point.lon}
@@ -1135,7 +1134,7 @@ function App() {
                 />
               </label>
               <label>
-                End Lat
+                终点纬度
                 <input
                   type="number"
                   value={routePayload.end_point.lat}
@@ -1148,7 +1147,7 @@ function App() {
                 />
               </label>
               <label>
-                End Lon
+                终点经度
                 <input
                   type="number"
                   value={routePayload.end_point.lon}
@@ -1163,34 +1162,34 @@ function App() {
             </div>
 
             <p className="route-time-tip">
-              `Start Time` is request context time; `Query Time` targets 5-minute speed
-              bins. When query time changes, fastest routes may change.
+              `起始时间` 表示请求上下文时间；`查询时间` 用于命中 5 分钟速度桶。
+              当查询时间变化时，最快路径可能变化。
             </p>
             {routeResult?.snapped_start_point && routeResult?.snapped_end_point ? (
               <p className="route-time-tip">
-                Snapped Start: node {routeResult.snapped_start_point.node_id} at (
+                起点吸附：节点 {routeResult.snapped_start_point.node_id}，坐标 (
                 {routeResult.snapped_start_point.lat.toFixed(6)},{" "}
                 {routeResult.snapped_start_point.lon.toFixed(6)}) | dist{" "}
-                {routeResult.snapped_start_point.snap_distance_m.toFixed(1)} m; Snapped End:
-                node {routeResult.snapped_end_point.node_id} at (
+                {routeResult.snapped_start_point.snap_distance_m.toFixed(1)} m；终点吸附：节点
+                {routeResult.snapped_end_point.node_id}，坐标 (
                 {routeResult.snapped_end_point.lat.toFixed(6)},{" "}
                 {routeResult.snapped_end_point.lon.toFixed(6)}) | dist{" "}
-                {routeResult.snapped_end_point.snap_distance_m.toFixed(1)} m.
+                {routeResult.snapped_end_point.snap_distance_m.toFixed(1)} m。
               </p>
             ) : null}
             <button onClick={onRunRoute} disabled={!capability?.ready}>
-              Run Route Compare
+              执行路径对比
             </button>
 
             <div className="route-map-controls">
-              <span className="legend-title">Map Route Layers</span>
+              <span className="legend-title">地图路径图层</span>
               <label className="legend-item shortest">
                 <input
                   type="checkbox"
                   checked={showShortestOnMap}
                   onChange={(e) => setShowShortestOnMap(e.target.checked)}
                 />
-                Shortest (cyan dashed)
+                最短路径（青色虚线）
               </label>
               <label className="legend-item fastest">
                 <input
@@ -1198,22 +1197,22 @@ function App() {
                   checked={showFastestOnMap}
                   onChange={(e) => setShowFastestOnMap(e.target.checked)}
                 />
-                Fastest (orange solid)
+                最快路径（橙色实线）
               </label>
               <button type="button" className="secondary-btn" onClick={clearRouteOnMap}>
-                Clear Route Layers
+                清空路径图层
               </button>
               <button
                 type="button"
                 className="secondary-btn"
                 onClick={clearRouteResult}
               >
-                Clear Route Result
+                清空路径结果
               </button>
             </div>
 
             <div className="route-pick-controls">
-              <span className="legend-title">Map Point Picker</span>
+              <span className="legend-title">地图选点</span>
               <button
                 type="button"
                 className={`secondary-btn ${routePickMode === "start" ? "active-mode" : ""}`}
@@ -1221,7 +1220,7 @@ function App() {
                   setRoutePickMode((prev) => (prev === "start" ? "none" : "start"))
                 }
               >
-                Pick Start Point
+                选择起点
               </button>
               <button
                 type="button"
@@ -1230,48 +1229,48 @@ function App() {
                   setRoutePickMode((prev) => (prev === "end" ? "none" : "end"))
                 }
               >
-                Pick End Point
+                选择终点
               </button>
               <span className="pick-tip">
                 {routePickMode === "none"
-                  ? "Choose a mode, then click on map to fill coordinates"
+                  ? "请先选择模式，再点击地图自动回填坐标"
                   : routePickMode === "start"
-                    ? "Picking START point: click on map"
-                    : "Picking END point: click on map"}
+                    ? "正在选择起点：请点击地图"
+                    : "正在选择终点：请点击地图"}
               </span>
             </div>
 
             <div className="map-wrap">
-              <div className="map-head">Route Compare Map (MapLibre GL)</div>
+              <div className="map-head">路径对比地图（MapLibre GL）</div>
               <div ref={routeMapContainerRef} className="map-canvas" />
             </div>
 
             {routeOverlap ? (
               <p className="route-overlap-tip">
-                Shortest and fastest routes are identical at current query time.
+                当前查询时间下，最短路径与最快路径一致。
               </p>
             ) : null}
 
             {routeResult ? (
               <div className="route-result-grid">
                 <article className="route-card">
-                  <h5>Shortest Route</h5>
+                  <h5>最短路径</h5>
                   <p>
-                    Total Distance: {(routeResult.shortest_route?.distance_m ?? 0).toFixed(2)} m
+                    总里程：{(routeResult.shortest_route?.distance_m ?? 0).toFixed(2)} m
                   </p>
                   <p>
-                    Total Time: {(routeResult.shortest_route?.estimated_time_s ?? 0).toFixed(2)} s
+                    总耗时：{(routeResult.shortest_route?.estimated_time_s ?? 0).toFixed(2)} s
                   </p>
                   <div className="route-edges">
                     {((routeResult.shortest_route?.edges ?? [])).map((edge) => (
                       <div
                         key={`short-${edge.seq}-${edge.edge_id}`}
                         className="route-edge-row"
-                        title={`road=${edge.road_id ?? "unknown"}, segDist=${edge.distance_m.toFixed(2)}m, segTime=${edge.estimated_time_s.toFixed(2)}s, cumDist=${edge.cumulative_distance_m.toFixed(2)}m, cumTime=${edge.cumulative_time_s.toFixed(2)}s`}
+                        title={`道路=${edge.road_id ?? "未知"}, 分段里程=${edge.distance_m.toFixed(2)}m, 分段耗时=${edge.estimated_time_s.toFixed(2)}s, 累计里程=${edge.cumulative_distance_m.toFixed(2)}m, 累计耗时=${edge.cumulative_time_s.toFixed(2)}s`}
                       >
                         <span>#{edge.seq}</span>
-                        <span>edge {edge.edge_id}</span>
-                        <span>road {edge.road_id ?? "-"}</span>
+                        <span>边 {edge.edge_id}</span>
+                        <span>道路 {edge.road_id ?? "-"}</span>
                         <span>{safeNum(edge.distance_m).toFixed(1)} m</span>
                         <span>{safeNum(edge.estimated_time_s).toFixed(1)} s</span>
                       </div>
@@ -1280,23 +1279,23 @@ function App() {
                 </article>
 
                 <article className="route-card">
-                  <h5>Fastest Route</h5>
+                  <h5>最快路径</h5>
                   <p>
-                    Total Distance: {(routeResult.fastest_route?.distance_m ?? 0).toFixed(2)} m
+                    总里程：{(routeResult.fastest_route?.distance_m ?? 0).toFixed(2)} m
                   </p>
                   <p>
-                    Total Time: {(routeResult.fastest_route?.estimated_time_s ?? 0).toFixed(2)} s
+                    总耗时：{(routeResult.fastest_route?.estimated_time_s ?? 0).toFixed(2)} s
                   </p>
                   <div className="route-edges">
                     {((routeResult.fastest_route?.edges ?? [])).map((edge) => (
                       <div
                         key={`fast-${edge.seq}-${edge.edge_id}`}
                         className="route-edge-row"
-                        title={`road=${edge.road_id ?? "unknown"}, segDist=${edge.distance_m.toFixed(2)}m, segTime=${edge.estimated_time_s.toFixed(2)}s, cumDist=${edge.cumulative_distance_m.toFixed(2)}m, cumTime=${edge.cumulative_time_s.toFixed(2)}s`}
+                        title={`道路=${edge.road_id ?? "未知"}, 分段里程=${edge.distance_m.toFixed(2)}m, 分段耗时=${edge.estimated_time_s.toFixed(2)}s, 累计里程=${edge.cumulative_distance_m.toFixed(2)}m, 累计耗时=${edge.cumulative_time_s.toFixed(2)}s`}
                       >
                         <span>#{edge.seq}</span>
-                        <span>edge {edge.edge_id}</span>
-                        <span>road {edge.road_id ?? "-"}</span>
+                        <span>边 {edge.edge_id}</span>
+                        <span>道路 {edge.road_id ?? "-"}</span>
                         <span>{safeNum(edge.distance_m).toFixed(1)} m</span>
                         <span>{safeNum(edge.estimated_time_s).toFixed(1)} s</span>
                       </div>

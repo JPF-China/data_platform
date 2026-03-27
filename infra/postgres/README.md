@@ -5,7 +5,7 @@
 3. 创建数据库 `harbin_traffic`。
 4. 执行 `bootstrap.sql` 初始化扩展和分层表结构。
 
-## SQL 文件分层
+## 数据库脚本分层
 
 - `init.sql`：基础扩展 + 路网/路径核心表（不含入仓与统计明细）
 - `ingest_schema.sql`：入仓链路表与索引
@@ -19,7 +19,7 @@
 - 默认业务时区是 `Asia/Shanghai`；可先执行 `SET app.business_timezone = 'Asia/Shanghai';` 覆盖。
 - 这是存量库兜底脚本，不属于正常新库初始化流程。
 - 示例：
-  - `psql "dbname=harbin_traffic user=apple host=localhost port=5432" -f infra/postgres/migrate_timezone_agnostic.sql`
+  - `psql "dbname=harbin_traffic user=postgres host=localhost port=5432 password=postgres" -f infra/postgres/migrate_timezone_agnostic.sql`
 
 ## 入仓定位
 

@@ -207,9 +207,9 @@ API 规则：
 - 数据库：`harbin_traffic`
 - 主机：`localhost`
 - 端口：`5432`
-- 用户：`apple`
-- 连接串：`postgresql+psycopg://apple@localhost:5432/harbin_traffic`
-- `psycopg` 连接信息：`dbname=harbin_traffic user=apple host=localhost port=5432`
+- 用户：`postgres`
+- 连接串：`postgresql+psycopg://postgres:postgres@localhost:5432/harbin_traffic`
+- `psycopg` 连接信息：`dbname=harbin_traffic user=postgres host=localhost port=5432 password=postgres`
 - Python：`/Users/apple/python_data/bin/python`
 - pgRouting 本地配置与专项测试：`docs/pgrouting_environment.md`
 

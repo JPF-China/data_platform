@@ -1,4 +1,4 @@
-# pgRouting 测试环境配置与验证
+# 路径扩展（pgRouting）测试环境配置与验证
 
 本文档提供可复用的 pgRouting 本地测试环境配置步骤，并给出专项测试命令。
 
@@ -24,14 +24,14 @@ brew services start postgresql@18
 3) 初始化数据库结构
 
 ```bash
-psql "dbname=harbin_traffic user=apple host=localhost port=5432" -f infra/postgres/bootstrap.sql
+psql "dbname=harbin_traffic user=postgres host=localhost port=5432 password=postgres" -f infra/postgres/bootstrap.sql
 ```
 
 4) 启用扩展并验证
 
 ```bash
-psql "dbname=harbin_traffic user=apple host=localhost port=5432" -c "CREATE EXTENSION IF NOT EXISTS postgis; CREATE EXTENSION IF NOT EXISTS pgrouting;"
-psql "dbname=harbin_traffic user=apple host=localhost port=5432" -c "SELECT extname FROM pg_extension WHERE extname IN ('postgis','pgrouting') ORDER BY extname;"
+psql "dbname=harbin_traffic user=postgres host=localhost port=5432 password=postgres" -c "CREATE EXTENSION IF NOT EXISTS postgis; CREATE EXTENSION IF NOT EXISTS pgrouting;"
+psql "dbname=harbin_traffic user=postgres host=localhost port=5432 password=postgres" -c "SELECT extname FROM pg_extension WHERE extname IN ('postgis','pgrouting') ORDER BY extname;"
 ```
 
 预期输出包含 `postgis` 与 `pgrouting`。

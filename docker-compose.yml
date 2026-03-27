@@ -1,0 +1,73 @@
+services:
+  # PostgreSQL with PostGIS and pgRouting
+  postgres:
+    build:
+      context: ./infra/postgres
+      dockerfile: Dockerfile
+    container_name: harbin-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: harbin_traffic
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ./infra/postgres/ingest_schema.sql:/docker-entrypoint-initdb.d/02-ingest.sql
+      - ./infra/postgres/stats_schema.sql:/docker-entrypoint-initdb.d/03-stats.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d harbin_traffic"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - harbin-network
+
+  # FastAPI Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: harbin-backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/harbin_traffic
+      DB_CONNINFO: "dbname=harbin_traffic user=postgres host=postgres port=5432 password=postgres"
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      BUSINESS_TIMEZONE: Asia/Shanghai
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./backend/app:/app/app
+      - ./data:/data:ro
+      - ./jldpath:/jldpath:ro
+      - ./bfmap_ways.csv:/bfmap_ways.csv:ro
+    networks:
+      - harbin-network
+
+  # React/Vite Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    container_name: harbin-frontend
+    environment:
+      VITE_API_BASE: http://localhost:8000/api/v1
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    networks:
+      - harbin-network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  harbin-network:
+    driver: bridge

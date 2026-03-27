@@ -135,32 +135,32 @@ describe("App", () => {
 
   it("renders dashboard and KPI cards", async () => {
     render(<App />);
-    expect(screen.getByText("Workspace")).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByText("Total Trips")).toBeInTheDocument());
-    expect(screen.getByText("Heatmap Playback")).toBeInTheDocument();
-    expect(screen.getByText("Distance Boxplot")).toBeInTheDocument();
-    expect(screen.getByText("Speed Boxplot")).toBeInTheDocument();
+    expect(screen.getByText("工作台")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("总行程数")).toBeInTheDocument());
+    expect(screen.getByText("热力回放")).toBeInTheDocument();
+    expect(screen.getByText("里程箱线图")).toBeInTheDocument();
+    expect(screen.getByText("速度箱线图")).toBeInTheDocument();
   });
 
   it("renders route result edge table after compare", async () => {
     render(<App />);
-    const routeEntry = await screen.findByRole("button", { name: /route compare/i });
+    const routeEntry = await screen.findByRole("button", { name: /路径对比/i });
     await act(async () => {
       routeEntry.click();
     });
-    const btn = await screen.findByText("Run Route Compare");
+    const btn = await screen.findByText("执行路径对比");
     await act(async () => {
       btn.click();
     });
-    await waitFor(() => expect(screen.getByText("Shortest Route")).toBeInTheDocument());
-    expect(screen.getByText("Fastest Route")).toBeInTheDocument();
-    expect(screen.getByText(/edge 1/i)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("最短路径")).toBeInTheDocument());
+    expect(screen.getByText("最快路径")).toBeInTheDocument();
+    expect(screen.getByText(/边 1/i)).toBeInTheDocument();
   });
 
   it("shows boxplot hover hint text", async () => {
     render(<App />);
     await waitFor(() =>
-      expect(screen.getByText("Hover a box to see exact values")).toBeInTheDocument()
+      expect(screen.getByText("悬停箱体可查看精确数值")).toBeInTheDocument()
     );
   });
 });
