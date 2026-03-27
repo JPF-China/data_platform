@@ -401,3 +401,30 @@ gantt
     添加 README、.gitignore、首次运行日志 : 17, 2024-01-17, 1d
     统一路网入仓命名，收敛路网构建与映射职责 : 18, 2024-01-18, 1d
 ```
+
+---
+
+### 18. `session_20260327_docker_onboarding_hardening.md`
+**时间：2026-03-27**
+
+**实现目标：**
+完成“新人 clone 后可直接 Docker 部署”的全链路收口：环境配置模板、容器编排、数据下载解压、中文文档/界面、实机启动验证与问题修复。
+
+**所做探索与变更：**
+- **分支与基础能力**：创建 `feat/dockerize` 分支，新增 `docker-compose.yml`、`docker-compose.dev.yml`、`backend/frontend Dockerfile`，补齐 `.env.example` 与 `scripts/start.sh`/`scripts/stop.sh`，并在 `Makefile` 增加 Docker 命令。
+- **配置与兼容**：`backend/app/core/config.py` 改为 `pydantic-settings` + `.env` 读取；`backend/pyproject.toml` 与 `backend/uv.lock` 对齐 Python 3.11；测试中移除硬编码 `user=apple`，统一支持环境变量。
+- **前端与文档中文化**：`frontend/src/App.tsx`、`frontend/src/App.test.tsx`、`frontend/README.md`、`README.md`、`backend/README.md` 等改为中文语义与中文说明。
+- **文档收口**：删除 `QUICKSTART.md`、`DEPLOYMENT.md`，将启动/部署/排障整合进根 `README.md`，降低新人阅读成本。
+- **数据准备自动化**：新增 `scripts/prepare_data.sh` 与 `make data-prepare`，支持主包 `zip`（`deepgtt-h5/*.h5`）和补充包 `7z`（`jldpath/*.jld2`）自动下载、解压、复制；新增目录结构强校验、旧数据清理、文件数量校验（默认 5+5，可环境变量覆盖）。
+- **数据库镜像增强**：新增 `infra/postgres/Dockerfile`，在 PostGIS 基础上安装 pgRouting；前端新增 `frontend/Dockerfile.prod` 使用生产构建 + Nginx。
+- **实机验证与故障修复**：
+  - 真实启动中发现 backend 构建阶段 `apt` 频繁 502/EOF，移除 `backend/Dockerfile` 中非必要系统依赖安装，改用纯 Python 依赖路径。
+  - 真实重建中发现 `/bfmap_ways.csv` 缺失，已在 `docker-compose.yml` 给 backend 增加 `./bfmap_ways.csv:/bfmap_ways.csv:ro` 挂载。
+  - 路由回归使用正确请求模型（`start_point/end_point`）后验证通过。
+- **最终运行结果**：容器三服务正常（postgres healthy、backend up、frontend up）；`/healthz` 正常；`/api/v1/summary/daily` 有数据；`/api/v1/route/capability` 返回 `ready=true`；`/api/v1/route/compare` 实测可返回 shortest/fastest 路径。
+
+**探索与决策：**
+- **采用原因**：将“启动脚本 + 数据脚本 + 单一 README”作为新人入口，可最大化降低环境差异带来的失败率。
+- **采用原因**：数据脚本改为“结构强校验 + 数量校验 + 清理旧文件”，避免静默成功但数据不完整的隐患。
+- **采用原因**：backend 构建去系统依赖可显著降低海外源/代理波动对启动成功率的影响。
+- **注意事项**：`README.md` 与 `scripts/prepare_data.sh` 中补充数据链接仍为 `xxx` 占位，待替换为真实链接后即可完整执行自动数据准备。

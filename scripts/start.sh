@@ -17,6 +17,21 @@ if ! command -v docker &> /dev/null; then
     exit 1
 fi
 
+if ! python3 - <<'PY'
+import subprocess
+import sys
+
+try:
+    subprocess.run(["docker", "info"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=8, check=True)
+except Exception:
+    sys.exit(1)
+PY
+then
+    echo "Docker daemon is not ready (or docker command timed out)"
+    echo "Please start Docker Desktop (or Docker Engine) and retry"
+    exit 1
+fi
+
 # Check if docker-compose is available
 if ! command -v docker-compose &> /dev/null && ! docker compose version &> /dev/null; then
     echo "❌ Docker Compose is not installed"
@@ -31,6 +46,16 @@ else
     COMPOSE_CMD="docker compose"
 fi
 
+if [ "${SKIP_REGISTRY_CHECK:-0}" != "1" ]; then
+    registry_code="$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 --max-time 15 https://registry-1.docker.io/v2/ || true)"
+    if [ "$registry_code" = "000" ]; then
+        echo "无法连接 Docker Hub（registry-1.docker.io），镜像拉取会失败。"
+        echo "请先检查网络/代理，或配置镜像加速器后重试。"
+        echo "如已预拉取镜像可跳过检查: SKIP_REGISTRY_CHECK=1 ./scripts/start.sh"
+        exit 1
+    fi
+fi
+
 # Check if .env files exist
 if [ ! -f "backend/.env" ]; then
     echo "⚠️  backend/.env not found. Creating from template..."
@@ -42,13 +67,27 @@ if [ ! -f "frontend/.env" ]; then
     cp frontend/.env.example frontend/.env
 fi
 
+# Ensure optional data mount directories exist
+mkdir -p data jldpath
+
 # Start services
 echo "[1/3] Starting services with Docker..."
 $COMPOSE_CMD up -d
 
 echo ""
-echo "[2/3] Waiting for services to be ready..."
-sleep 10
+echo "[2/3] Waiting for backend health check..."
+
+attempt=0
+max_attempts=60
+until curl -fsS "http://localhost:8000/healthz" >/dev/null 2>&1; do
+    attempt=$((attempt + 1))
+    if [ "$attempt" -ge "$max_attempts" ]; then
+        echo "Backend health check timeout. Showing recent logs..."
+        $COMPOSE_CMD logs --tail=80 backend postgres frontend || true
+        exit 1
+    fi
+    sleep 2
+done
 
 echo ""
 echo "[3/3] Checking service health..."
@@ -64,6 +103,6 @@ echo "   Backend docs: http://localhost:8000/docs"
 echo "   Database:  localhost:5432 (postgres/postgres)"
 echo ""
 echo "💡 Tips:"
-echo "   - View logs: docker-compose logs -f"
-echo "   - Stop services: docker-compose down"
-echo "   - Restart services: docker-compose restart"
+echo "   - View logs: $COMPOSE_CMD logs -f"
+echo "   - Stop services: $COMPOSE_CMD down"
+echo "   - Restart services: $COMPOSE_CMD restart"

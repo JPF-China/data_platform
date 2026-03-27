@@ -10,8 +10,19 @@ from sqlalchemy import text
 
 TEST_DB_NAME = os.getenv("TEST_DB_NAME", "harbin_test")
 
-os.environ["DATABASE_URL"] = f"postgresql+psycopg://apple@localhost:5432/{TEST_DB_NAME}"
-os.environ["DB_CONNINFO"] = f"dbname={TEST_DB_NAME} user=apple host=localhost port=5432"
+# Database configuration for tests
+DB_USER = os.getenv("DB_USER", "postgres")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "postgres")
+DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_PORT = os.getenv("DB_PORT", "5432")
+
+# Set environment variables for the application
+os.environ["DATABASE_URL"] = (
+    f"postgresql+psycopg://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{TEST_DB_NAME}"
+)
+os.environ["DB_CONNINFO"] = (
+    f"dbname={TEST_DB_NAME} user={DB_USER} host={DB_HOST} port={DB_PORT} password={DB_PASSWORD}"
+)
 
 from app.db.session import SessionLocal
 from app.main import app
@@ -19,7 +30,8 @@ from app.main import app
 
 def _ensure_test_database() -> None:
     with psycopg.connect(
-        "dbname=postgres user=apple host=localhost port=5432", autocommit=True
+        f"dbname=postgres user={DB_USER} password={DB_PASSWORD} host={DB_HOST} port={DB_PORT}",
+        autocommit=True,
     ) as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT 1 FROM pg_database WHERE datname = %s", (TEST_DB_NAME,))

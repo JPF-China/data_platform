@@ -3,12 +3,6 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies for PostgreSQL client and psycopg
-RUN apt-get update && apt-get install -y \
-    libpq-dev \
-    gcc \
-    && rm -rf /var/lib/apt/lists/*
-
 # Install uv for Python package management
 RUN pip install --no-cache-dir uv
 

@@ -19,10 +19,10 @@
 - 主机：`localhost`
 - 端口：`5432`
 - 数据库：`harbin_traffic`
-- 用户：`apple`
-- 密码：空（本地信任连接）
-- SQLAlchemy URL：`postgresql+psycopg://apple@localhost:5432/harbin_traffic`
-- psycopg conninfo：`dbname=harbin_traffic user=apple host=localhost port=5432`
+- 用户：`postgres`
+- 密码：`postgres`
+- SQLAlchemy URL：`postgresql+psycopg://postgres:postgres@localhost:5432/harbin_traffic`
+- psycopg conninfo：`dbname=harbin_traffic user=postgres host=localhost port=5432 password=postgres`
 
 ## 4. 核心输入
 

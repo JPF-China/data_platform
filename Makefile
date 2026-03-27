@@ -1,30 +1,36 @@
 .PHONY: test smoke test-backend test-frontend test-ingest test-stats test-route test-route-pgrouting test-api test-db
-.PHONY: docker-up docker-down docker-restart docker-logs docker-build
+.PHONY: docker-up docker-down docker-restart docker-logs docker-build data-prepare
+
+COMPOSE := $(shell if command -v docker-compose >/dev/null 2>&1; then echo docker-compose; else echo "docker compose"; fi)
 
 # Docker commands
 docker-up:
 	@echo "Starting all services with Docker..."
-	docker-compose up -d
+	$(COMPOSE) up -d
 
 docker-down:
 	@echo "Stopping all services..."
-	docker-compose down
+	$(COMPOSE) down
 
 docker-restart:
 	@echo "Restarting all services..."
-	docker-compose restart
+	$(COMPOSE) restart
 
 docker-logs:
 	@echo "Showing logs (press Ctrl+C to exit)..."
-	docker-compose logs -f
+	$(COMPOSE) logs -f
 
 docker-build:
 	@echo "Building Docker images..."
-	docker-compose build --no-cache
+	$(COMPOSE) build --no-cache
 
 docker-ps:
 	@echo "Showing running containers..."
-	docker-compose ps
+	$(COMPOSE) ps
+
+data-prepare:
+	@echo "下载并准备原始数据..."
+	bash scripts/prepare_data.sh
 
 # Test commands
 test:

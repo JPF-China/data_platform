@@ -25,13 +25,28 @@ def _build_test_db_name() -> str:
 
 
 def _admin_conninfo() -> str:
+    db_user = os.getenv("DB_USER", "postgres")
+    db_password = os.getenv("DB_PASSWORD", "postgres")
+    db_host = os.getenv("DB_HOST", "localhost")
+    db_port = os.getenv("DB_PORT", "5432")
     return os.environ.get(
-        "DB_ADMIN_CONNINFO", "dbname=postgres user=apple host=localhost port=5432"
+        "DB_ADMIN_CONNINFO",
+        f"dbname=postgres user={db_user} password={db_password} host={db_host} port={db_port}",
     )
 
 
 def _test_conninfo(db_name: str) -> str:
-    return f"dbname={db_name} user=apple host=localhost port=5432"
+    db_user = os.getenv("DB_USER", "postgres")
+    db_host = os.getenv("DB_HOST", "localhost")
+    db_port = os.getenv("DB_PORT", "5432")
+    return f"dbname={db_name} user={db_user} host={db_host} port={db_port}"
+
+
+def _database_url(db_name: str) -> str:
+    db_user = os.getenv("DB_USER", "postgres")
+    db_host = os.getenv("DB_HOST", "localhost")
+    db_port = os.getenv("DB_PORT", "5432")
+    return f"postgresql+psycopg://{db_user}@{db_host}:{db_port}/{db_name}"
 
 
 def _apply_schema(conninfo: str) -> None:
@@ -293,8 +308,9 @@ def test_distance_boxplot_columns_present(regression_test_conninfo: str):
 
 
 def test_daily_summary_contract_with_isolated_database(regression_test_conninfo: str):
+    db_name = regression_test_conninfo.split()[0].split("=")[1]
     engine = create_engine(
-        f"postgresql+psycopg://apple@localhost:5432/{regression_test_conninfo.split()[0].split('=')[1]}",
+        _database_url(db_name),
         future=True,
     )
     try:
