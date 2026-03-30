@@ -364,16 +364,19 @@ gantt
     基础结构 : 3, 2024-01-03, 1d
     确立直接并行入仓，删除CSV中间层 : 6, 2024-01-06, 1d
     拆分 ingest_service，新增 ingest 模式 : 10, 2024-01-10, 1d
+    新增 refresh 模式并补 stale 运行态收口 : 20, 2024-01-20, 1d
 
     section 路网入仓模块
     创建 bfmap_ways_import、road_segments、ingest_road_map : 4, 2024-01-04, 1d
     集成到 rebuild 流程 : 4, 2024-01-04, 1d
     增加 stats_initialized 检查，依赖路网入仓模块 : 9, 2024-01-09, 1d
+    修复 ingest_road_map 早退并增强映射覆盖 : 20, 2024-01-20, 1d
 
     section 统计刷新模块
     heatmap_bins、road_speed_bins 依赖映射 : 4, 2024-01-04, 1d
     拆分 stats_service，支持 compute 模式 : 10, 2024-01-10, 1d
     增加 stats_initialized 标记 : 9, 2024-01-09, 1d
+    table_row_stats 关键表真实计数与 ANALYZE : 20, 2024-01-20, 1d
 
     section 路径搜索模块
     初始 networkx 图遍历 : 3, 2024-01-03, 1d
@@ -393,6 +396,7 @@ gantt
     调用 /route/capability，显示能力状态 : 8, 2024-01-08, 1d
     重构 api.ts，图层/结果分离，双时间字段，重合提示 : 16, 2024-01-16, 1d
     重构为 Stitch 风格布局，主题切换，地图职责分离 : 19, 2024-01-19, 1d
+    增加 VITE_MAP_TILES 与底图兜底 : 20, 2024-01-20, 1d
     
     section 文档与规范模块
     整合 spec/impl_guide/test_system，删除过时文档 : 7, 2024-01-07, 1d
@@ -400,6 +404,7 @@ gantt
     添加 pgrouting_environment.md : 15, 2024-01-15, 1d
     添加 README、.gitignore、首次运行日志 : 17, 2024-01-17, 1d
     统一路网入仓命名，收敛路网构建与映射职责 : 18, 2024-01-18, 1d
+    启动/执行文档收口并补数据链接 : 20, 2024-01-20, 1d
 ```
 
 ---
@@ -427,7 +432,7 @@ gantt
 - **采用原因**：将“启动脚本 + 数据脚本 + 单一 README”作为新人入口，可最大化降低环境差异带来的失败率。
 - **采用原因**：数据脚本改为“结构强校验 + 数量校验 + 清理旧文件”，避免静默成功但数据不完整的隐患。
 - **采用原因**：backend 构建去系统依赖可显著降低海外源/代理波动对启动成功率的影响。
-- **注意事项**：`README.md` 与 `scripts/prepare_data.sh` 中补充数据链接仍为 `xxx` 占位，待替换为真实链接后即可完整执行自动数据准备。
+- **状态更新**：补充数据链接占位符已替换为真实 Google Drive 链接（README 与脚本默认值已同步）。
 
 ---
 
@@ -445,3 +450,26 @@ gantt
 **探索与决策：**
 - **采用原因**：在合并前补全 session 轨迹，确保变更审计链完整。
 - **采用原因**：以主分支为发布基线进行推送，便于团队新人直接从 `main` 获取可运行版本。
+
+---
+
+### 20. `session_20260330_120425.md`
+**时间：2026-03-30**
+
+**实现目标：**
+修复热力图与路径展示异常，降低新人构建门槛，并完成代码与文档收口对齐。
+
+**所做探索与变更：**
+- **Pipeline 编排增强**：在 `backend/app/etl/load_data.py` 新增 `refresh` 模式，复用 `trips/trip_segments` 只刷新路网映射与统计，避免重复全量入仓；同时在新任务启动时自动收口历史 `pipeline_*` 的 stale `running` 记录。  
+- **路网映射修复**：在 `backend/app/services/road_mapping_service.py` 去除“直接映射后提前返回”的早退逻辑，补齐几何兜底映射，提升映射覆盖。  
+- **统计与可见性修复**：在 `backend/app/services/stats_service.py` 中改进 `heatmap_bins` 聚合与 `table_row_stats` 刷新策略（先 `ANALYZE`，关键展示表写真实 `COUNT(*)`），减少新构建后的“0 行误判”。  
+- **前端地图可用性增强**：在 `frontend/src/App.tsx` 增加 `VITE_MAP_TILES` 配置能力与底图背景兜底；`frontend/.env.example` 同步新增瓦片配置说明。  
+- **Docker 启动优化**：`docker-compose.yml` 增加 `restart: unless-stopped`；`scripts/start.sh` 增加 `START_MODE=auto|full|frontend`，并按数据库卷存在自动切换前端优先启动。  
+- **文档收口**：统一更新 `README.md`、`backend/README.md`、`frontend/README.md`、`project_context.md`、`spec.md`、`implementation_guide.md`，对齐运行模式、排障流程和地图瓦片配置。  
+- **数据链接补齐**：将 JLD2 链接补齐到 README，并在后续修正中同步替换 `scripts/prepare_data.sh` 中的占位默认地址。  
+
+**探索与决策：**
+- **采用原因**：`rebuild` 对全量明细重算过重，日常改为 `refresh` 可显著缩短恢复时间，减少新人“卡死”感知。  
+- **采用原因**：关键展示表行数使用真实计数可避免统计视图延迟导致的误判，便于运维与新人验收。  
+- **采用原因**：地图底图依赖外部瓦片服务，增加 `VITE_MAP_TILES` 可在受限网络环境快速切换可达瓦片源。  
+- **风险提醒**：本地 `pytest` 仍依赖数据库角色/权限环境，需按测试环境说明补齐后再跑全量回归。  

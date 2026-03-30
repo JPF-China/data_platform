@@ -6,7 +6,7 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
 MAIN_URL_DEFAULT="https://drive.usercontent.google.com/download?id=1tdgarnn28CM01o9hbeKLUiJ1o1lskrqA&export=download&authuser=0&confirm=t&uuid=2481bd7f-f21f-42a5-bb24-a8067a17356f&at=AGN2oQ3yy0IH0i35n6R_CZShxh3Y%3A1773114478451"
-EXTRA_URL_DEFAULT="xxx"
+EXTRA_URL_DEFAULT="https://drive.google.com/file/d/16tHtR6McxzQYGAP_B4rO9nPRMMOuvfXH/view?usp=sharing"
 MAIN_ARCHIVE_FORMAT_DEFAULT="zip"
 EXTRA_ARCHIVE_FORMAT_DEFAULT="7z"
 EXPECTED_H5_COUNT_DEFAULT="5"
@@ -35,8 +35,8 @@ download_and_extract() {
     local name="$2"
     local fmt="$3"
 
-    if [ -z "$url" ] || [ "$url" = "xxx" ]; then
-        echo "跳过 $name：下载地址为空或仍是占位符。"
+    if [ -z "$url" ]; then
+        echo "跳过 $name：下载地址为空。"
         return
     fi
 
