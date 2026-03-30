@@ -138,31 +138,54 @@ def aggregate_heatmap_bins(cur: psycopg.Cursor) -> None:
           metric_date, time_bucket_start, time_bucket_end, road_id, road_name,
           trip_count, vehicle_count, flow_count, distance_m, geom
         )
+        WITH road_geom AS (
+          SELECT
+            road_id,
+            ST_Multi(ST_LineMerge(ST_Union(geom)))::geometry(MultiLineString, 4326) AS geom
+          FROM road_segments
+          WHERE road_id IS NOT NULL
+            AND geom IS NOT NULL
+          GROUP BY road_id
+        ),
+        traffic AS (
+          SELECT
+            t.trip_date AS metric_date,
+            date_trunc('minute', s.start_time)
+              - make_interval(mins => (extract(minute from s.start_time)::int % 5)) AS time_bucket_start,
+            date_trunc('minute', s.start_time)
+              - make_interval(mins => (extract(minute from s.start_time)::int % 5))
+              + interval '5 minutes' AS time_bucket_end,
+            rs.road_id AS road_id,
+            MAX(s.road_name) AS road_name,
+            COUNT(DISTINCT s.trip_id) AS trip_count,
+            COUNT(DISTINCT t.devid) AS vehicle_count,
+            COUNT(*) AS flow_count,
+            SUM(s.distance_m) AS distance_m
+          FROM trip_segments s
+          JOIN trips t ON t.id = s.trip_id
+          JOIN ingest_road_map map ON map.trip_road_id = s.road_id
+          JOIN road_segments rs ON rs.id = map.road_segment_id
+          WHERE s.start_time IS NOT NULL
+            AND t.trip_date IS NOT NULL
+            AND t.is_valid = true
+          GROUP BY t.trip_date,
+                   time_bucket_start,
+                   time_bucket_end,
+                   rs.road_id
+        )
         SELECT
-          t.trip_date,
-          date_trunc('minute', s.start_time)
-            - make_interval(mins => (extract(minute from s.start_time)::int % 5)) AS time_bucket_start,
-          date_trunc('minute', s.start_time)
-            - make_interval(mins => (extract(minute from s.start_time)::int % 5))
-            + interval '5 minutes' AS time_bucket_end,
-          rs.road_id,
-          MAX(s.road_name) AS road_name,
-          COUNT(DISTINCT s.trip_id) AS trip_count,
-          COUNT(DISTINCT t.devid) AS vehicle_count,
-          COUNT(*) AS flow_count,
-          SUM(s.distance_m) AS distance_m,
-          ST_Multi(ST_LineMerge(ST_Union(s.path_geom)))::geometry(MultiLineString, 4326) AS geom
-        FROM trip_segments s
-        JOIN trips t ON t.id = s.trip_id
-        JOIN ingest_road_map map ON map.trip_road_id = s.road_id
-        JOIN road_segments rs ON rs.id = map.road_segment_id
-        WHERE s.start_time IS NOT NULL
-          AND t.trip_date IS NOT NULL
-          AND t.is_valid = true
-        GROUP BY t.trip_date,
-                 time_bucket_start,
-                 time_bucket_end,
-                 rs.road_id
+          tr.metric_date,
+          tr.time_bucket_start,
+          tr.time_bucket_end,
+          tr.road_id,
+          tr.road_name,
+          tr.trip_count,
+          tr.vehicle_count,
+          tr.flow_count,
+          tr.distance_m,
+          rg.geom
+        FROM traffic tr
+        LEFT JOIN road_geom rg ON rg.road_id = tr.road_id
         """
     )
 
@@ -214,13 +237,38 @@ def aggregate_road_speed_bins(cur: psycopg.Cursor) -> None:
 
 
 def aggregate_table_row_stats(cur: psycopg.Cursor) -> None:
+    cur.execute(
+        """
+        ANALYZE trips,
+                trip_points_raw,
+                trip_match_meta,
+                trip_points_matched,
+                trip_segments,
+                ingest_road_map,
+                daily_metrics,
+                daily_distance_boxplot,
+                daily_speed_boxplot,
+                heatmap_bins,
+                road_segments,
+                road_speed_bins,
+                route_results
+        """
+    )
     cur.execute("TRUNCATE table_row_stats")
     cur.execute(
         """
         INSERT INTO table_row_stats (table_name, row_count, refreshed_at)
         SELECT
           t.table_name,
-          COALESCE(s.n_live_tup::bigint, 0) AS row_count,
+          CASE t.table_name
+            WHEN 'daily_metrics' THEN (SELECT COUNT(*) FROM daily_metrics)
+            WHEN 'daily_distance_boxplot' THEN (SELECT COUNT(*) FROM daily_distance_boxplot)
+            WHEN 'daily_speed_boxplot' THEN (SELECT COUNT(*) FROM daily_speed_boxplot)
+            WHEN 'heatmap_bins' THEN (SELECT COUNT(*) FROM heatmap_bins)
+            WHEN 'road_speed_bins' THEN (SELECT COUNT(*) FROM road_speed_bins)
+            WHEN 'ingest_road_map' THEN (SELECT COUNT(*) FROM ingest_road_map)
+            ELSE COALESCE(s.n_live_tup::bigint, 0)
+          END AS row_count,
           now() AS refreshed_at
         FROM (
           VALUES
@@ -229,6 +277,7 @@ def aggregate_table_row_stats(cur: psycopg.Cursor) -> None:
             ('trip_match_meta'),
             ('trip_points_matched'),
             ('trip_segments'),
+            ('ingest_road_map'),
             ('daily_metrics'),
             ('daily_distance_boxplot'),
             ('daily_speed_boxplot'),

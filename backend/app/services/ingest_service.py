@@ -107,6 +107,24 @@ def finalize_pipeline_run_failure(
     )
 
 
+def mark_stale_running_pipeline_runs(
+    cur: psycopg.Cursor, *, current_run_id: int
+) -> None:
+    cur.execute(
+        """
+        UPDATE ingest_runs
+        SET
+          finished_at = now(),
+          status = 'failed',
+          error_message = 'stale running record closed by newer execution'
+        WHERE status = 'running'
+          AND run_type LIKE 'pipeline_%%'
+          AND id <> %s
+        """,
+        (current_run_id,),
+    )
+
+
 def try_acquire_rebuild_lock(cur: psycopg.Cursor, lock_key: int) -> bool:
     cur.execute("SELECT pg_try_advisory_lock(%s)", (lock_key,))
     row = cur.fetchone()

@@ -219,6 +219,17 @@ const navItems: Array<{
   },
 ];
 
+const mapTileTemplates = (
+  (
+    import.meta as unknown as {
+      env?: Record<string, string | undefined>;
+    }
+  ).env?.VITE_MAP_TILES ?? "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+)
+  .split(",")
+  .map((item) => item.trim())
+  .filter((item) => item.length > 0);
+
 function parseLineStringWkt(wkt: string): number[][] | null {
   const m = wkt.trim().match(/^LINESTRING\s*\((.*)\)$/i);
   if (!m) return null;
@@ -339,12 +350,21 @@ function App() {
         sources: {
           osm: {
             type: "raster",
-            tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+            tiles: mapTileTemplates,
             tileSize: 256,
             attribution: "© OpenStreetMap contributors",
           },
         },
-        layers: [{ id: "osm", type: "raster", source: "osm" }],
+        layers: [
+          {
+            id: "bg",
+            type: "background",
+            paint: {
+              "background-color": "#0a1324",
+            },
+          },
+          { id: "osm", type: "raster", source: "osm" },
+        ],
       },
       center: [126.64, 45.76],
       zoom: 11,

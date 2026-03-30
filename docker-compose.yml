@@ -21,6 +21,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
     networks:
       - harbin-network
 
@@ -41,6 +42,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    restart: unless-stopped
     volumes:
       - ./backend/app:/app/app
       - ./data:/data:ro
@@ -61,6 +63,7 @@ services:
       - "5173:80"
     depends_on:
       - backend
+    restart: unless-stopped
     networks:
       - harbin-network
 

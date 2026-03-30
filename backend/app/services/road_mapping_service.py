@@ -53,9 +53,6 @@ def rebuild_ingest_road_map(cur: psycopg.Cursor) -> int:
     )
     direct_count = cur.rowcount
 
-    if direct_count > 0:
-        return direct_count
-
     cur.execute(
         """
         WITH seg AS (

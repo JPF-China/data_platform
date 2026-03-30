@@ -251,6 +251,11 @@ def run_pipeline(
                 source_file="h5+jld2",
                 max_trips=max_trips,
             )
+            ingest_service.mark_stale_running_pipeline_runs(
+                cur,
+                current_run_id=run_id,
+            )
+            conn.commit()
             lock_acquired = False
 
             try:
@@ -353,6 +358,30 @@ def run_pipeline(
                     _progress("step4/5", "done")
                     _progress("step5/5", "frontend consumes API only (no DB write)")
                     _progress("step5/5", "run: backend uvicorn + frontend npm run dev")
+                elif mode == "refresh":
+                    lock_acquired = ingest_service.try_acquire_rebuild_lock(
+                        cur, INGEST_ADVISORY_LOCK_KEY
+                    )
+                    if not lock_acquired:
+                        raise RuntimeError(
+                            "another rebuild ingest is running (advisory lock not acquired)"
+                        )
+
+                    _progress(
+                        "step1/5", "skip: mode=refresh (reuse existing trips/segments)"
+                    )
+                    _progress(
+                        "step2/5", "start: refresh route mapping from existing data"
+                    )
+                    _step_route_ingest(base_dir, cur)
+                    conn.commit()
+                    _progress("step2/5", "done")
+
+                    _progress("step3/5", "skip: mode=refresh")
+                    _progress("step4/5", "start: compute aggregate tables")
+                    _step4_compute(cur)
+                    _progress("step4/5", "done")
+                    _progress("step5/5", "refresh mode completed")
                 elif mode == "optimize":
                     _progress("step1/5", "start: optimize tables and indexes")
                     _step_optimize(cur)
@@ -443,9 +472,17 @@ def main() -> None:
     )
     parser.add_argument(
         "--mode",
-        choices=["ingest", "rebuild", "optimize", "compute", "smoke", "runtime"],
+        choices=[
+            "ingest",
+            "rebuild",
+            "refresh",
+            "optimize",
+            "compute",
+            "smoke",
+            "runtime",
+        ],
         default="runtime",
-        help="Pipeline mode: ingest|rebuild|optimize|compute|smoke|runtime",
+        help="Pipeline mode: ingest|rebuild|refresh|optimize|compute|smoke|runtime",
     )
     args = parser.parse_args()
     run_pipeline(

@@ -42,7 +42,7 @@
 | `daily_speed_boxplot` | 日速度箱形图 | `metric_date` 主键 | 离线刷新 | `trips`、`trip_segments` | 只读，不回扫明细 |
 | `heatmap_bins` | 热力图时间窗 | 无唯一约束 | 离线刷新 | `trip_segments`、`trip_points_matched`、`ingest_road_map` | 只读，不回扫明细 |
 | `road_speed_bins` | 道路速度桶 | `road_id + bucket_start` 唯一 | 离线刷新 | `trip_segments`、`ingest_road_map` | 只读，不回扫明细 |
-| `table_row_stats` | 表行数统计 | `table_name` 主键（建议） | 批量刷新 | 系统统计视图 + 维护任务 | 只读，不回扫明细 |
+| `table_row_stats` | 表行数统计 | `table_name` 主键（建议） | 批量刷新 | `ANALYZE` + 关键表 `COUNT(*)` + 统计视图 | 只读，不回扫明细 |
 
 ### 3.3 路径表
 
@@ -135,7 +135,7 @@ road_segments + road_speed_bins -> 路径搜索 -> route_results
 - 维护 `source/target/cost/reverse_cost` 路由字段
 - 维护 `gid/osm_id/class_id/length_m/geom` 业务字段
 - 将入仓侧 `road_id` 等匹配键对齐到 BfMap 路网边，供统计和路径复用
-- 该模块仅作为 `rebuild` 子流程存在，不单独暴露运行入口
+- 该模块仅作为 `rebuild` / `refresh` 子流程存在，不单独暴露运行入口
 
 ### 4.4 统计刷新模块
 
@@ -253,6 +253,7 @@ road_segments + road_speed_bins -> 路径搜索 -> route_results
 |---|---|---|---|---|
 | `ingest` | 源文件 | 明细表 | 清理明细层并并行入仓、重建明细索引、analyze | 不清理统计层和路径层依赖表 |
 | `rebuild` | 源文件 | 明细表+路网+映射+统计表 | 清表/重建分区、入仓、路网入仓模块、刷新统计、准备路径资产 | 不保留旧明细 |
+| `refresh` | 现有明细表 | 路网+映射+统计表 | 复用 `trips/trip_segments`，刷新路网映射与统计 | 不重跑明细入仓 |
 | `optimize` | 明细表 | 分区/索引 | 维护分区、索引、`VACUUM/ANALYZE` | 不读原始文件、不刷新统计、不改路网 |
 | `compute` | 明细表 | 统计表 | 在路网和映射可用前提下刷新统计表 | 不改明细结构 |
 | `smoke` | 统计表、API | 读验证结果 | 验证读链路 | 不扫大表 |
@@ -260,11 +261,10 @@ road_segments + road_speed_bins -> 路径搜索 -> route_results
 
 ## 7. 核心执行顺序（固定）
 
-1. `ingest`
-2. `路网入仓模块`
-3. `compute`
-4. `stats`
-5. `route search`
+1. `ingest`（`rebuild` 模式）
+2. `路网入仓模块`（`rebuild` / `refresh`）
+3. `统计刷新`（`rebuild` / `refresh` / `compute`）
+4. `route search`
 
 ## 7. 开发任务拆分
 

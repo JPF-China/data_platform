@@ -51,7 +51,7 @@ cd data_platform
 
 第二份数据下载地址（Google Drive，7z；解压后目录为 `jldpath/`，包含 5 个 `*.jld2`，你补全后替换）：
 
-`xxx`
+`https://drive.google.com/file/d/16tHtR6McxzQYGAP_B4rO9nPRMMOuvfXH/view?usp=sharing`
 
 执行数据准备脚本（会下载、解压并把 `*.h5` 放到 `data/`、`*.jld2` 放到 `jldpath/`）：
 
@@ -81,6 +81,23 @@ make data-prepare
 ./scripts/start.sh
 ```
 
+启动逻辑（默认 `START_MODE=auto`）：
+
+- 若检测到已存在数据库卷（`*_postgres_data`），仅启动前端服务（更快复用已准备数据）。
+- 若未检测到数据库卷，启动完整服务栈（postgres + backend + frontend）。
+
+说明：当前实现以“数据库卷存在”作为“数据库已准备好数据”的判定代理条件。
+
+可手动指定启动模式：
+
+```bash
+# 强制完整流程
+START_MODE=full ./scripts/start.sh
+
+# 强制仅前端
+START_MODE=frontend ./scripts/start.sh
+```
+
 若你已预拉取镜像且网络受限，可跳过 Docker Hub 可达性检查：
 
 ```bash
@@ -89,9 +106,12 @@ SKIP_REGISTRY_CHECK=1 ./scripts/start.sh
 
 启动后访问：
 
-- 前端：http://localhost:5173
-- 后端：http://localhost:8000
-- 接口文档：http://localhost:8000/docs
+- `START_MODE=full` 或 `START_MODE=auto` 且无数据库卷：
+  - 前端：http://localhost:5173
+  - 后端：http://localhost:8000
+  - 接口文档：http://localhost:8000/docs
+- `START_MODE=frontend` 或 `START_MODE=auto` 且有数据库卷：
+  - 前端：http://localhost:5173
 
 停止服务：
 
@@ -102,17 +122,86 @@ SKIP_REGISTRY_CHECK=1 ./scripts/start.sh
 ## 手动启动（可选）
 
 ```bash
+# 全量服务（postgres + backend + frontend）
 docker compose up -d
+
+# 仅前端（不自动拉起 backend/postgres）
+docker compose up -d --no-deps frontend
+
 docker compose ps
 docker compose down
+```
+
+补充：`docker-compose.yml` 已配置 `restart: unless-stopped`，Docker daemon 重启后会自动恢复已启动服务。
+
+若地图底图空白（通常是网络无法访问 OSM 瓦片）：
+
+- 前端地图依赖瓦片服务 `VITE_MAP_TILES`（默认 OSM）。
+- 在受限网络下请在 `frontend/.env` 中改为可访问的瓦片地址（支持逗号分隔多地址）。
+- 修改后重建并重启前端：`docker compose build frontend && docker compose up -d frontend`。
+
+## Docker 日常操作建议
+
+```bash
+# 首次初始化/需要后端接口时
+START_MODE=full ./scripts/start.sh
+
+# 日常只看前端页面（复用已有数据）
+./scripts/start.sh
+
+# 查看服务状态与日志
+docker compose ps
+docker compose logs -f frontend
+docker compose logs -f backend
+
+# 单服务重启（代码或配置更新后常用）
+docker compose restart frontend
+docker compose restart backend
+
+# 完整停止（保留数据库卷）
+./scripts/stop.sh
+
+# 清空数据库并重建（慎用）
+docker compose down -v
+START_MODE=full ./scripts/start.sh
 ```
 
 ## 入仓执行（可选）
 
 ```bash
 cd backend
-uv run python app/ingest/ingest_all.py
+uv run python -m app.etl.load_data --base-dir /Users/apple/data_platform --mode rebuild
 ```
+
+常用模式说明：
+
+- `rebuild`：全量重建（清空后重入仓 + 路网入仓模块 + 统计聚合），首次初始化使用。
+- `refresh`：复用已入仓的 `trips/trip_segments`，只刷新路网映射与统计聚合，日常推荐。
+- `compute`：只刷新统计聚合。
+
+Docker 内执行（推荐，路径固定）：
+
+```bash
+# 首次全量
+docker compose exec -T backend uv run python -m app.etl.load_data --base-dir / --mode rebuild
+
+# 全量入仓中断后/已有明细数据时，走快速刷新
+docker compose exec -T backend uv run python -m app.etl.load_data --base-dir / --mode refresh
+```
+
+若遇到历史卡死的 `running` 任务（常见于中断重跑）：
+
+```bash
+docker compose exec -T postgres psql -U postgres -d harbin_traffic -c "SELECT id,status,run_type,started_at,finished_at FROM ingest_runs ORDER BY id DESC LIMIT 10;"
+```
+
+新版本会在启动新任务时自动把历史 `pipeline_*` 的 `running` 记录标记为失败（stale），避免误判状态。
+
+`table_row_stats` 说明：
+
+- 刷新时会先 `ANALYZE` 关键表。
+- 对关键展示表（`daily_*`、`heatmap_bins`、`road_speed_bins`、`ingest_road_map`）使用真实 `COUNT(*)` 写入。
+- 避免新构建后短时间出现 `0` 的误判。
 
 ## 测试命令
 

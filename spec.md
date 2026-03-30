@@ -29,6 +29,7 @@ H5/JLD2 原始文件
 
 - `ingest`：只执行入仓编排，清理并重建明细层，不清理统计层和路径依赖表。
 - `rebuild`：总编排入口，串联入仓、路网入仓模块、统计刷新、路径能力准备与运行链路校验；其中路网构建和映射生成不单独暴露运行入口。
+- `refresh`：复用已有明细数据，只执行路网入仓模块与统计刷新（不重跑明细入仓），用于日常刷新。
 - `optimize`：不触碰源文件，只做入仓明细层的分区、索引、`VACUUM/ANALYZE` 维护。
 - `compute`：不入仓，只在路网和映射可用前提下刷新统计表。
 - `smoke`：只验证统计表和 API 可用性，不扫描大表。
@@ -106,7 +107,7 @@ H5/JLD2 原始文件
 - 输入：`bfmap_ways.csv`、入仓明细（`trip_match_meta`、`trip_segments`）
 - 输出：`bfmap_ways_import`、`road_segments`、`ingest_road_map`
 - 职责：导入 BfMap 边表 CSV、构建 pgRouting 主图、生成入仓路段到 BfMap 边的映射
-- 编排约束：该模块仅作为 `rebuild` 子流程存在，不单独暴露运行入口
+- 编排约束：该模块作为 `rebuild` / `refresh` 子流程存在，不单独暴露独立脚本入口
 - 不做：业务统计、API 请求处理、图搜索
 
 ### 6.3 数据库优化模块
@@ -185,6 +186,7 @@ API 规则：
 - 路径主图以 BfMap CSV 构建的 `road_segments` 为准，不以 H5/JLD2 直接替代路网拓扑。
 - 入仓路段与 BfMap 路段的对应关系通过 `ingest_road_map` 维护。
 - 路径搜索执行前必须通过统计模块初始化校验（至少具备 `table_row_stats` 的统计链路标记）。
+- `table_row_stats` 刷新应优先覆盖关键展示表的真实计数（至少 `daily_*`、`heatmap_bins`、`road_speed_bins`、`ingest_road_map`），避免新构建后的行数误判。
 - 若请求时间桶无速度数据，最快路退化为静态权重路径，并与最短路保持一致。
 - 路径链路采用无时区 `datetime` 语义：传入时间、分桶时间、落库时间均按同一钟面时间处理，不做时区换算。
 - `route/compare` 前端交互应同时暴露 `start_time` 与 `query_time`，避免混淆行程时间与速度桶查询时间。

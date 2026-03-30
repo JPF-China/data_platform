@@ -29,6 +29,16 @@ npm run test
 前端调用 `http://127.0.0.1:8000/api/v1`。
 请先启动后端。
 
+地图配置补充：
+
+- 默认瓦片源通过 `VITE_MAP_TILES` 配置，默认值为 OSM。
+- 若网络无法访问 OSM（底图空白），请在 `frontend/.env` 里改为可访问的瓦片地址。
+- 支持逗号分隔多地址，例如：
+
+```env
+VITE_MAP_TILES=https://tile-a.example.com/{z}/{x}/{y}.png,https://tile-b.example.com/{z}/{x}/{y}.png
+```
+
 路径对比交互要点：
 
 - 必须同时传 `start_time` 与 `query_time`。
