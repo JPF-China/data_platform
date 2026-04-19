@@ -13,19 +13,39 @@ import {
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./App.css";
 import {
+  fetchCongestionAvoidanceRecommendation,
+  fetchCrowdProfileSummary,
+  fetchCrowdSegments,
+  fetchCrowdVehicles,
   fetchDailyDistance,
+  fetchDepartureWindowRecommendation,
   fetchDistanceBoxplot,
   fetchHeatmap,
-  fetchHeatmapBuckets,
+  fetchLatestJobStatus,
+  fetchMetaAssets,
+  fetchMetaDates,
+  fetchMetaHeatmapBuckets,
+  fetchMetaPortalSummary,
   fetchRouteCapability,
   fetchRouteCompare,
+  fetchRouteRecommendation,
   fetchSpeedBoxplot,
   fetchSummary,
   fetchTripCount,
   fetchVehicleCount,
   type BoxRow,
+  type CongestionAvoidanceRecommendation,
+  type CrowdProfileSummary,
+  type CrowdSegment,
+  type CrowdVehicle,
   type DailyPoint,
+  type DepartureWindowRecommendation,
   type HeatItem,
+  type MetaAsset,
+  type MetaDates,
+  type MetaJob,
+  type MetaPortalSummary,
+  type RouteRecommendation,
   type RouteCapability,
   type RoutePayload,
   type RouteResult,
@@ -34,6 +54,12 @@ import {
 
 type GeoJsonSourceLike = { setData: (data: unknown) => void };
 type MapBounds = [[number, number], [number, number]];
+type MapBBox = {
+  minLat: number;
+  minLon: number;
+  maxLat: number;
+  maxLon: number;
+};
 type MapInstanceLike = {
   addControl: (control: unknown, position?: string) => void;
   on: (event: string, cb: (...args: unknown[]) => void) => void;
@@ -52,7 +78,14 @@ type MaplibreModuleLike = {
   NavigationControl: new () => unknown;
 };
 type ThemeMode = "dark" | "light";
-type AppSection = "overview" | "heatmap" | "route";
+type AppSection =
+  | "assets"
+  | "overview"
+  | "heatmap"
+  | "route"
+  | "recommend"
+  | "crowd"
+  | "bigscreen";
 type RoutePickMode = "none" | "start" | "end";
 
 const tooltipValue = (value: unknown): number => {
@@ -183,11 +216,13 @@ function BoxplotMini({ data, unit }: { data: BoxRow[]; unit: string }) {
 }
 
 const defaultRoutePayload: RoutePayload = {
-  start_time: "2015-01-03T08:00:00",
-  query_time: "2015-01-03T08:00:00",
+  start_time: "",
+  query_time: "",
   start_point: { lat: 45.756, lon: 126.642 },
   end_point: { lat: 45.721, lon: 126.588 },
 };
+
+const buildRouteDateTime = (dateText: string): string => `${dateText}T08:00:00`;
 
 const navItems: Array<{
   id: AppSection;
@@ -196,6 +231,13 @@ const navItems: Array<{
   icon: string;
   group: string;
 }> = [
+  {
+    id: "assets",
+    title: "资产门户",
+    desc: "四层资产与状态总览",
+    icon: "AS",
+    group: "门户",
+  },
   {
     id: "overview",
     title: "总览",
@@ -216,6 +258,27 @@ const navItems: Array<{
     desc: "最短路与最快路",
     icon: "RT",
     group: "路径",
+  },
+  {
+    id: "recommend",
+    title: "推荐中心",
+    desc: "路径、时段与避堵建议",
+    icon: "RC",
+    group: "路径",
+  },
+  {
+    id: "crowd",
+    title: "圈人中心",
+    desc: "车辆标签与道路热点",
+    icon: "CD",
+    group: "圈人",
+  },
+  {
+    id: "bigscreen",
+    title: "答辩大屏",
+    desc: "自动轮播与全屏展示",
+    icon: "BS",
+    group: "展示",
   },
 ];
 
@@ -243,6 +306,55 @@ function parseLineStringWkt(wkt: string): number[][] | null {
   return points.length >= 2 ? points : null;
 }
 
+function parseGeometryBounds(geometryText?: string | null): MapBBox | null {
+  if (!geometryText) return null;
+  try {
+    const geom = JSON.parse(geometryText) as {
+      type?: string;
+      coordinates?: unknown;
+    };
+    const coords: number[][] = [];
+    if (geom?.type === "LineString" && Array.isArray(geom.coordinates)) {
+      for (const point of geom.coordinates) {
+        if (
+          Array.isArray(point) &&
+          point.length >= 2 &&
+          typeof point[0] === "number" &&
+          typeof point[1] === "number"
+        ) {
+          coords.push([point[0], point[1]]);
+        }
+      }
+    }
+    if (geom?.type === "MultiLineString" && Array.isArray(geom.coordinates)) {
+      for (const line of geom.coordinates) {
+        if (!Array.isArray(line)) continue;
+        for (const point of line) {
+          if (
+            Array.isArray(point) &&
+            point.length >= 2 &&
+            typeof point[0] === "number" &&
+            typeof point[1] === "number"
+          ) {
+            coords.push([point[0], point[1]]);
+          }
+        }
+      }
+    }
+    if (!coords.length) return null;
+    const lons = coords.map((item) => item[0]);
+    const lats = coords.map((item) => item[1]);
+    return {
+      minLat: Math.min(...lats) - 0.01,
+      minLon: Math.min(...lons) - 0.01,
+      maxLat: Math.max(...lats) + 0.01,
+      maxLon: Math.max(...lons) + 0.01,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function App() {
   const [summary, setSummary] = useState<SummaryRow[]>([]);
   const [tripSeries, setTripSeries] = useState<DailyPoint[]>([]);
@@ -252,7 +364,7 @@ function App() {
   const [distanceBox, setDistanceBox] = useState<BoxRow[]>([]);
   const [routePayload, setRoutePayload] = useState<RoutePayload>(defaultRoutePayload);
   const [routeResult, setRouteResult] = useState<RouteResult | null>(null);
-  const [selectedDate, setSelectedDate] = useState<string>("2015-01-03");
+  const [selectedDate, setSelectedDate] = useState<string>("");
   const [buckets, setBuckets] = useState<string[]>([]);
   const [bucketIndex, setBucketIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -265,6 +377,23 @@ function App() {
   } | null>(null);
   const [capability, setCapability] = useState<RouteCapability | null>(null);
   const [capabilityError, setCapabilityError] = useState<string | null>(null);
+  const [metaAssets, setMetaAssets] = useState<MetaAsset[]>([]);
+  const [metaDates, setMetaDates] = useState<MetaDates | null>(null);
+  const [metaPortalSummary, setMetaPortalSummary] = useState<MetaPortalSummary | null>(
+    null
+  );
+  const [latestJob, setLatestJob] = useState<MetaJob | null>(null);
+  const [crowdSummary, setCrowdSummary] = useState<CrowdProfileSummary | null>(null);
+  const [crowdVehicles, setCrowdVehicles] = useState<CrowdVehicle[]>([]);
+  const [crowdSegments, setCrowdSegments] = useState<CrowdSegment[]>([]);
+  const [selectedCrowdTag, setSelectedCrowdTag] = useState<string>("");
+  const [routeRecommendation, setRouteRecommendation] =
+    useState<RouteRecommendation | null>(null);
+  const [departureRecommendation, setDepartureRecommendation] =
+    useState<DepartureWindowRecommendation | null>(null);
+  const [congestionRecommendation, setCongestionRecommendation] =
+    useState<CongestionAvoidanceRecommendation | null>(null);
+  const [recommendLoading, setRecommendLoading] = useState(false);
   const [showShortestOnMap, setShowShortestOnMap] = useState(true);
   const [showFastestOnMap, setShowFastestOnMap] = useState(true);
   const [showHeatmapOnMap, setShowHeatmapOnMap] = useState(true);
@@ -274,7 +403,11 @@ function App() {
   const [activeSection, setActiveSection] = useState<AppSection>("overview");
   const [routePickMode, setRoutePickMode] = useState<RoutePickMode>("none");
   const [mapInitTick, setMapInitTick] = useState(0);
+  const [bigScreenSlide, setBigScreenSlide] = useState(0);
+  const [bigScreenAutoPlay, setBigScreenAutoPlay] = useState(true);
+  const [bigScreenFocus, setBigScreenFocus] = useState(false);
 
+  const workspaceRef = useRef<HTMLElement | null>(null);
   const heatMapRef = useRef<MapInstanceLike | null>(null);
   const routeMapRef = useRef<MapInstanceLike | null>(null);
   const maplibreRef = useRef<MaplibreModuleLike | null>(null);
@@ -316,6 +449,63 @@ function App() {
 
   useEffect(() => {
     const run = async () => {
+      try {
+        const [dates, assets, portalSummary, job] = await Promise.all([
+          fetchMetaDates(),
+          fetchMetaAssets(),
+          fetchMetaPortalSummary().catch(() => null),
+          fetchLatestJobStatus(),
+        ]);
+        setMetaDates(dates);
+        setMetaAssets(assets);
+        setMetaPortalSummary(portalSummary);
+        setLatestJob(job);
+
+        const defaultHeatmapDate =
+          dates.default_heatmap_date ??
+          dates.heatmap_dates[0] ??
+          dates.default_summary_date ??
+          dates.summary_dates[0] ??
+          "";
+        if (defaultHeatmapDate) {
+          setSelectedDate((prev) => prev || defaultHeatmapDate);
+        }
+
+        const defaultRouteDate =
+          dates.default_route_date ??
+          dates.route_dates[0] ??
+          defaultHeatmapDate;
+        if (defaultRouteDate) {
+          setRoutePayload((prev) => ({
+            ...prev,
+            start_time: prev.start_time || buildRouteDateTime(defaultRouteDate),
+            query_time: prev.query_time || buildRouteDateTime(defaultRouteDate),
+          }));
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "加载元数据失败");
+      }
+    };
+    void run();
+  }, []);
+
+  useEffect(() => {
+    const run = async () => {
+      try {
+        const summaryData = await fetchCrowdProfileSummary();
+        setCrowdSummary(summaryData);
+        if (summaryData.items.length) {
+          setSelectedCrowdTag((prev) => prev || summaryData.items[0].tag_code);
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "加载圈人画像失败");
+      }
+    };
+    void run();
+  }, []);
+
+  useEffect(() => {
+    const run = async () => {
       setCapabilityError(null);
       try {
         setCapability(await fetchRouteCapability());
@@ -331,6 +521,16 @@ function App() {
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
   }, [theme]);
+
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      setBigScreenFocus(Boolean(document.fullscreenElement));
+    };
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
+    };
+  }, []);
 
   const initializeMap = useCallback(async (
     container: HTMLDivElement,
@@ -578,8 +778,13 @@ function App() {
 
   useEffect(() => {
     const run = async () => {
+      if (!selectedDate) {
+        setBuckets([]);
+        setBucketIndex(0);
+        return;
+      }
       try {
-        const items = await fetchHeatmapBuckets(selectedDate);
+        const items = await fetchMetaHeatmapBuckets(selectedDate);
         setBuckets(items);
         setBucketIndex(0);
       } catch (e) {
@@ -784,6 +989,14 @@ function App() {
     return () => window.clearInterval(timer);
   }, [isPlaying, buckets.length]);
 
+  useEffect(() => {
+    if (activeSection !== "bigscreen" || !bigScreenAutoPlay) return;
+    const timer = window.setInterval(() => {
+      setBigScreenSlide((prev) => (prev + 1) % 4);
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [activeSection, bigScreenAutoPlay]);
+
   const kpis = useMemo(() => {
     if (!summary.length) {
       return {
@@ -799,6 +1012,158 @@ function App() {
     };
   }, [summary]);
 
+  const heatmapDateOptions = useMemo(() => {
+    if (metaDates?.heatmap_dates?.length) {
+      return metaDates.heatmap_dates;
+    }
+    return summary.map((item) => item.date);
+  }, [metaDates, summary]);
+
+  const fallbackAssetLayerSummary = useMemo(() => {
+    const order = ["ODS", "DW", "TDM", "ADS"];
+    return order.map((layer) => {
+      const items = metaAssets.filter((item) => item.asset_layer === layer);
+      const readyCount = items.filter((item) => item.status === "ready").length;
+      return {
+        asset_layer: layer,
+        asset_count: items.length,
+        ready_count: readyCount,
+        total_rows: items.reduce((acc, item) => acc + item.row_count, 0),
+        completion_rate: readyCount / Math.max(1, items.length),
+        refreshed_at: null,
+      };
+    });
+  }, [metaAssets]);
+
+  const assetLayerSummary = useMemo(
+    () =>
+      metaPortalSummary?.items?.length
+        ? metaPortalSummary.items
+        : fallbackAssetLayerSummary,
+    [fallbackAssetLayerSummary, metaPortalSummary]
+  );
+
+  const assetPortalTotals = useMemo(
+    () => ({
+      totalAssetCount:
+        metaPortalSummary?.total_asset_count ??
+        fallbackAssetLayerSummary.reduce((acc, item) => acc + item.asset_count, 0),
+      totalReadyCount:
+        metaPortalSummary?.total_ready_count ??
+        fallbackAssetLayerSummary.reduce((acc, item) => acc + item.ready_count, 0),
+      totalRows:
+        metaPortalSummary?.total_rows ??
+        fallbackAssetLayerSummary.reduce((acc, item) => acc + item.total_rows, 0),
+    }),
+    [fallbackAssetLayerSummary, metaPortalSummary]
+  );
+
+  const readyAssetCount = useMemo(
+    () => assetPortalTotals.totalReadyCount,
+    [assetPortalTotals]
+  );
+
+  const latestRefreshText = useMemo(() => {
+    const value =
+      metaPortalSummary?.refreshed_at ??
+      metaDates?.refreshed_at ??
+      latestJob?.finished_at ??
+      null;
+    if (!value) return "暂无";
+    return value.replace("T", " ").slice(0, 16);
+  }, [latestJob, metaDates, metaPortalSummary]);
+
+  const latestJobText = useMemo(() => {
+    if (!latestJob) return "暂无任务记录";
+    const label =
+      latestJob.status === "success"
+        ? "成功"
+        : latestJob.status === "failed"
+          ? "失败"
+          : latestJob.status === "running"
+            ? "运行中"
+            : latestJob.status;
+    return `${label}${latestJob.message ? ` · ${latestJob.message}` : ""}`;
+  }, [latestJob]);
+
+  const selectedCrowdTagName = useMemo(() => {
+    const tagCode = selectedCrowdTag || crowdSummary?.items?.[0]?.tag_code;
+    if (!tagCode) return "暂无标签";
+    const item = crowdSummary?.items.find((entry) => entry.tag_code === tagCode);
+    return item?.tag_name ?? tagCode;
+  }, [crowdSummary, selectedCrowdTag]);
+
+  const crowdHeadline = useMemo(() => {
+    if (!crowdSummary?.items?.length) return "暂无圈人标签结果";
+    const top = crowdSummary.items[0];
+    return `${top.tag_name} 当前覆盖 ${top.vehicle_count.toLocaleString()} 辆车`;
+  }, [crowdSummary]);
+
+  const routeStrategyHeadline = useMemo(() => {
+    if (routeRecommendation?.summary) return routeRecommendation.summary;
+    if (capability?.route_compare_ready) {
+      return "路线策略引擎已就绪，可生成路径、时段和避堵建议。";
+    }
+    return "路线策略能力尚未完全就绪。";
+  }, [capability, routeRecommendation]);
+
+  const bigScreenSlides = useMemo(
+    () => ["平台总览", "资产门户", "推荐策略", "圈人与热点"],
+    []
+  );
+
+  const capabilityStates = useMemo(
+    () => [
+      { label: "图可用", ready: Boolean(capability?.graph_ready) },
+      { label: "动态速度", ready: Boolean(capability?.dynamic_speed_ready) },
+      { label: "路径对比", ready: Boolean(capability?.route_compare_ready) },
+    ],
+    [capability]
+  );
+
+  useEffect(() => {
+    if (!selectedDate && heatmapDateOptions.length) {
+      setSelectedDate(heatmapDateOptions[0]);
+    }
+  }, [heatmapDateOptions, selectedDate]);
+
+  useEffect(() => {
+    const fallbackRouteDate =
+      metaDates?.default_route_date ??
+      metaDates?.route_dates?.[0] ??
+      heatmapDateOptions[0] ??
+      "";
+    if (!fallbackRouteDate) return;
+    if (routePayload.start_time && routePayload.query_time) return;
+    setRoutePayload((prev) => ({
+      ...prev,
+      start_time: prev.start_time || buildRouteDateTime(fallbackRouteDate),
+      query_time: prev.query_time || buildRouteDateTime(fallbackRouteDate),
+    }));
+  }, [heatmapDateOptions, metaDates, routePayload.query_time, routePayload.start_time]);
+
+  useEffect(() => {
+    const resolvedTag = selectedCrowdTag || crowdSummary?.items?.[0]?.tag_code || "";
+    if (!resolvedTag) {
+      setCrowdVehicles([]);
+      setCrowdSegments([]);
+      return;
+    }
+    const run = async () => {
+      try {
+        const [vehicles, segments] = await Promise.all([
+          fetchCrowdVehicles(resolvedTag),
+          fetchCrowdSegments(resolvedTag),
+        ]);
+        setCrowdVehicles(vehicles);
+        setCrowdSegments(segments);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "加载圈人结果失败");
+      }
+    };
+    void run();
+  }, [crowdSummary, selectedCrowdTag]);
+
   const onRunRoute = async () => {
     setError(null);
     try {
@@ -810,6 +1175,38 @@ function App() {
       setRouteResult(await fetchRouteCompare(routePayload));
     } catch (e) {
       setError(e instanceof Error ? e.message : "路径对比接口调用失败");
+    }
+  };
+
+  const onRunRecommendation = async () => {
+    setError(null);
+    setRecommendLoading(true);
+    try {
+      const [routeRec, departureRec, congestionRec] = await Promise.all([
+        fetchRouteRecommendation(routePayload),
+        fetchDepartureWindowRecommendation({
+          travelDate: routePayload.query_time.slice(0, 10),
+          startLat: routePayload.start_point.lat,
+          startLon: routePayload.start_point.lon,
+          endLat: routePayload.end_point.lat,
+          endLon: routePayload.end_point.lon,
+        }),
+        fetchCongestionAvoidanceRecommendation({
+          startTime: routePayload.start_time,
+          queryTime: routePayload.query_time,
+          startLat: routePayload.start_point.lat,
+          startLon: routePayload.start_point.lon,
+          endLat: routePayload.end_point.lat,
+          endLon: routePayload.end_point.lon,
+        }),
+      ]);
+      setRouteRecommendation(routeRec);
+      setDepartureRecommendation(departureRec);
+      setCongestionRecommendation(congestionRec);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "推荐服务调用失败");
+    } finally {
+      setRecommendLoading(false);
     }
   };
 
@@ -829,6 +1226,55 @@ function App() {
 
   const restoreHeatmapLayer = () => {
     setShowHeatmapOnMap(true);
+  };
+
+  const focusCrowdSegmentOnHeatmap = (segment: CrowdSegment) => {
+    const nextBbox = parseGeometryBounds(segment.geometry);
+    if (nextBbox) {
+      setBbox(nextBbox);
+    }
+    if (!selectedDate && heatmapDateOptions.length) {
+      setSelectedDate(heatmapDateOptions[0]);
+    }
+    setShowHeatmapOnMap(true);
+    setActiveSection("heatmap");
+  };
+
+  const applyCrowdSegmentToRoute = (segment: CrowdSegment) => {
+    const nextBbox = parseGeometryBounds(segment.geometry);
+    if (!nextBbox) return;
+    const centerLat = (nextBbox.minLat + nextBbox.maxLat) / 2;
+    const centerLon = (nextBbox.minLon + nextBbox.maxLon) / 2;
+    setRoutePayload((prev) => ({
+      ...prev,
+      end_point: {
+        lat: Number(centerLat.toFixed(6)),
+        lon: Number(centerLon.toFixed(6)),
+      },
+    }));
+    setActiveSection("route");
+  };
+
+  const toggleBigScreenFocus = async () => {
+    const root = workspaceRef.current;
+    if (document.fullscreenElement) {
+      if (document.exitFullscreen) {
+        await document.exitFullscreen();
+      } else {
+        setBigScreenFocus(false);
+      }
+      return;
+    }
+    if (root?.requestFullscreen) {
+      try {
+        await root.requestFullscreen();
+        return;
+      } catch {
+        setBigScreenFocus((prev) => !prev);
+        return;
+      }
+    }
+    setBigScreenFocus((prev) => !prev);
   };
 
   const routeOverlap = useMemo(() => {
@@ -856,13 +1302,62 @@ function App() {
   }, []);
 
   return (
-    <main className="workspace">
+    <main
+      ref={workspaceRef}
+      className={`workspace ${bigScreenFocus ? "focus-mode" : ""}`}
+    >
       <aside className="sidebar">
         <div className="sidebar-brand">
           <p className="eyebrow">哈尔滨车辆行程分析平台</p>
           <h1>工作台</h1>
           <p className="sidebar-note">点击左侧模块，聚焦单一业务流程。</p>
         </div>
+
+        <section className="status-panel">
+          <div className="status-panel-head">
+            <h3>数据状态</h3>
+            <span
+              className={`status-pill ${
+                capability?.ready ? "ready" : "warning"
+              }`}
+            >
+              {capability?.ready ? "路径可用" : "待初始化"}
+            </span>
+          </div>
+          <div className="status-panel-grid">
+            <div className="status-row">
+              <span>最近刷新</span>
+              <strong>{latestRefreshText}</strong>
+            </div>
+            <div className="status-row">
+              <span>就绪资产</span>
+              <strong>
+                {readyAssetCount}/{assetPortalTotals.totalAssetCount || 0}
+              </strong>
+            </div>
+            <div className="status-row full">
+              <span>最近任务</span>
+              <strong>{latestJobText}</strong>
+            </div>
+          </div>
+          <div className="asset-status-list">
+            {metaAssets.slice(0, 4).map((asset) => (
+              <div key={asset.asset_key} className="asset-status-item">
+                <div>
+                  <span className="asset-name">{asset.display_name}</span>
+                  <span className="asset-layer">{asset.asset_layer}</span>
+                </div>
+                <span
+                  className={`status-pill ${
+                    asset.status === "ready" ? "ready" : "warning"
+                  }`}
+                >
+                  {asset.status === "ready" ? "已就绪" : "空"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
 
         <nav className="sidebar-nav" aria-label="仪表盘模块导航">
           {Object.entries(navGroups).map(([group, items]) => (
@@ -915,6 +1410,10 @@ function App() {
           <p>
             基于 H5 + JLD2 合并入仓，依托 PostGIS 统计能力，支持最短路与最快路的路径对比。
           </p>
+          <div className="content-meta">
+            <span>热力图日期数：{heatmapDateOptions.length}</span>
+            <span>最近刷新：{latestRefreshText}</span>
+          </div>
         </header>
 
         {error ? <section className="error">{error}</section> : null}
@@ -922,6 +1421,77 @@ function App() {
         {loading ? <section className="loading">正在加载后端数据...</section> : null}
 
         <div key={activeSection} className="panel-fade">
+        {activeSection === "assets" ? (
+          <section className="asset-portal">
+            <section className="kpi-grid asset-layer-grid">
+              <article className="card">
+                <h3>总资产数</h3>
+                <p>{assetPortalTotals.totalAssetCount.toLocaleString()}</p>
+                <div className="mini-metrics">
+                  <span>四层已登记</span>
+                  <span>门户读模型驱动</span>
+                </div>
+              </article>
+              <article className="card">
+                <h3>就绪资产</h3>
+                <p>{assetPortalTotals.totalReadyCount.toLocaleString()}</p>
+                <div className="mini-metrics">
+                  <span>最近刷新 {latestRefreshText}</span>
+                  <span>任务 {latestJob?.status ?? "unknown"}</span>
+                </div>
+              </article>
+              <article className="card">
+                <h3>总行数</h3>
+                <p>{assetPortalTotals.totalRows.toLocaleString()}</p>
+                <div className="mini-metrics">
+                  <span>覆盖 ODS / DW / TDM / ADS</span>
+                  <span>支持门户与推荐服务</span>
+                </div>
+              </article>
+            </section>
+
+            <section className="kpi-grid asset-layer-grid">
+              {assetLayerSummary.map((item) => (
+                <article key={item.asset_layer} className="card">
+                  <h3>{item.asset_layer} 资产</h3>
+                  <p>{item.asset_count.toLocaleString()}</p>
+                  <div className="mini-metrics">
+                    <span>就绪 {item.ready_count}</span>
+                    <span>总行数 {item.total_rows.toLocaleString()}</span>
+                    <span>完成率 {(item.completion_rate * 100).toFixed(0)}%</span>
+                  </div>
+                </article>
+              ))}
+            </section>
+
+            <section className="panel asset-catalog-panel">
+              <h4>资产目录</h4>
+              <div className="asset-catalog-list">
+                {metaAssets.map((asset) => (
+                  <div key={asset.asset_key} className="asset-catalog-item">
+                    <div>
+                      <strong>{asset.display_name}</strong>
+                      <p>{asset.description ?? asset.source_table}</p>
+                    </div>
+                    <div className="asset-catalog-meta">
+                      <span>{asset.asset_layer}</span>
+                      <span>{asset.source_table}</span>
+                      <span>{asset.row_count.toLocaleString()} rows</span>
+                      <span
+                        className={`status-pill ${
+                          asset.status === "ready" ? "ready" : "warning"
+                        }`}
+                      >
+                        {asset.status}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </section>
+        ) : null}
+
         {activeSection === "overview" ? (
           <>
             <section className="kpi-grid">
@@ -1018,14 +1588,16 @@ function App() {
                 <select
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
+                  disabled={!heatmapDateOptions.length}
                 >
-                  {["2015-01-03", "2015-01-04", "2015-01-05", "2015-01-06", "2015-01-07"].map(
-                    (d) => (
-                      <option key={d} value={d}>
-                        {d}
-                      </option>
-                    )
-                  )}
+                  {!heatmapDateOptions.length ? (
+                    <option value="">暂无可用日期</option>
+                  ) : null}
+                  {heatmapDateOptions.map((d) => (
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
+                  ))}
                 </select>
               </label>
               <label>
@@ -1105,7 +1677,7 @@ function App() {
                 起始时间
                 <input
                   type="datetime-local"
-                  value={routePayload.start_time.slice(0, 16)}
+                  value={routePayload.start_time ? routePayload.start_time.slice(0, 16) : ""}
                   onChange={(e) =>
                     setRoutePayload((prev) => ({
                       ...prev,
@@ -1118,7 +1690,7 @@ function App() {
                 查询时间
                 <input
                   type="datetime-local"
-                  value={routePayload.query_time.slice(0, 16)}
+                  value={routePayload.query_time ? routePayload.query_time.slice(0, 16) : ""}
                   onChange={(e) =>
                     setRoutePayload((prev) => ({
                       ...prev,
@@ -1197,7 +1769,14 @@ function App() {
                 {routeResult.snapped_end_point.snap_distance_m.toFixed(1)} m。
               </p>
             ) : null}
-            <button onClick={onRunRoute} disabled={!capability?.ready}>
+            <button
+              onClick={onRunRoute}
+              disabled={
+                !capability?.ready ||
+                !routePayload.start_time ||
+                !routePayload.query_time
+              }
+            >
               执行路径对比
             </button>
 
@@ -1324,6 +1903,509 @@ function App() {
                 </article>
               </div>
             ) : null}
+          </section>
+        ) : null}
+
+        {activeSection === "recommend" ? (
+          <section className="recommend-panel">
+            <h4>推荐中心</h4>
+            <p className="capability-line">
+              输出三类建议：路径推荐、出发时段推荐、拥堵规避建议。
+            </p>
+
+            <div className="inputs">
+              <label>
+                起始时间
+                <input
+                  type="datetime-local"
+                  value={routePayload.start_time ? routePayload.start_time.slice(0, 16) : ""}
+                  onChange={(e) =>
+                    setRoutePayload((prev) => ({
+                      ...prev,
+                      start_time: e.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label>
+                查询时间
+                <input
+                  type="datetime-local"
+                  value={routePayload.query_time ? routePayload.query_time.slice(0, 16) : ""}
+                  onChange={(e) =>
+                    setRoutePayload((prev) => ({
+                      ...prev,
+                      query_time: e.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label>
+                起点纬度
+                <input
+                  type="number"
+                  value={routePayload.start_point.lat}
+                  onChange={(e) =>
+                    setRoutePayload((prev) => ({
+                      ...prev,
+                      start_point: { ...prev.start_point, lat: Number(e.target.value) },
+                    }))
+                  }
+                />
+              </label>
+              <label>
+                起点经度
+                <input
+                  type="number"
+                  value={routePayload.start_point.lon}
+                  onChange={(e) =>
+                    setRoutePayload((prev) => ({
+                      ...prev,
+                      start_point: { ...prev.start_point, lon: Number(e.target.value) },
+                    }))
+                  }
+                />
+              </label>
+              <label>
+                终点纬度
+                <input
+                  type="number"
+                  value={routePayload.end_point.lat}
+                  onChange={(e) =>
+                    setRoutePayload((prev) => ({
+                      ...prev,
+                      end_point: { ...prev.end_point, lat: Number(e.target.value) },
+                    }))
+                  }
+                />
+              </label>
+              <label>
+                终点经度
+                <input
+                  type="number"
+                  value={routePayload.end_point.lon}
+                  onChange={(e) =>
+                    setRoutePayload((prev) => ({
+                      ...prev,
+                      end_point: { ...prev.end_point, lon: Number(e.target.value) },
+                    }))
+                  }
+                />
+              </label>
+            </div>
+
+            <button
+              type="button"
+              onClick={onRunRecommendation}
+              disabled={
+                recommendLoading ||
+                !capability?.ready ||
+                !routePayload.start_time ||
+                !routePayload.query_time
+              }
+            >
+              {recommendLoading ? "生成推荐中..." : "生成推荐方案"}
+            </button>
+
+            <section className="panel-grid recommend-grid">
+              <article className="panel">
+                <div className="recommend-head">
+                  <h4>路径推荐</h4>
+                  <span>{routeRecommendation?.recommended_strategy ?? "未生成"}</span>
+                </div>
+                {routeRecommendation ? (
+                  <>
+                    <p className="recommend-summary">{routeRecommendation.summary}</p>
+                    <div className="recommend-stat-row">
+                      <span>动态速度：{routeRecommendation.used_dynamic_speed ? "是" : "否"}</span>
+                      <span>时间收益：{routeRecommendation.time_saved_s.toFixed(1)} s</span>
+                      <span>里程差：{routeRecommendation.distance_delta_m.toFixed(1)} m</span>
+                    </div>
+                    <div className="recommend-reasons">
+                      {routeRecommendation.reasons.map((reason) => (
+                        <div key={reason} className="recommend-reason-item">
+                          {reason}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="empty">暂无路径推荐结果</div>
+                )}
+              </article>
+
+              <article className="panel">
+                <div className="recommend-head">
+                  <h4>出发时段推荐</h4>
+                  <span>
+                    {departureRecommendation?.recommended_start_time?.slice(11, 16) ??
+                      "未生成"}
+                  </span>
+                </div>
+                {departureRecommendation ? (
+                  <>
+                    <p className="recommend-summary">{departureRecommendation.summary}</p>
+                    <div className="recommend-reasons">
+                      {departureRecommendation.options.map((option) => (
+                        <div
+                          key={`${option.start_time}-${option.recommended_strategy}`}
+                          className="recommend-reason-item"
+                        >
+                          {option.start_time.slice(11, 16)} · {option.recommended_strategy} ·{" "}
+                          {option.estimated_time_s.toFixed(1)} s
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="empty">暂无时段推荐结果</div>
+                )}
+              </article>
+
+              <article className="panel panel-wide">
+                <div className="recommend-head">
+                  <h4>拥堵规避建议</h4>
+                  <span>{congestionRecommendation?.recommended_action ?? "未生成"}</span>
+                </div>
+                {congestionRecommendation ? (
+                  <>
+                    <p className="recommend-summary">{congestionRecommendation.summary}</p>
+                    <div className="recommend-stat-row">
+                      <span>
+                        当前网络：{congestionRecommendation.current_network_level ?? "unknown"}
+                      </span>
+                      <span>
+                        建议时段：{congestionRecommendation.recommended_query_time.slice(11, 16)}
+                      </span>
+                      <span>建议策略：{congestionRecommendation.recommended_strategy}</span>
+                    </div>
+                    <div className="recommend-reasons">
+                      {congestionRecommendation.reasons.map((reason) => (
+                        <div key={reason} className="recommend-reason-item">
+                          {reason}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="empty">暂无拥堵规避建议</div>
+                )}
+              </article>
+            </section>
+          </section>
+        ) : null}
+
+        {activeSection === "bigscreen" ? (
+          <section className={`bigscreen-panel ${bigScreenFocus ? "focus" : ""}`}>
+            <div className="bigscreen-banner">
+              <div>
+                <p className="eyebrow">答辩模式</p>
+                <h3>数据资产门户大屏</h3>
+                <p>
+                  面向课堂展示聚合门户、分析、推荐、圈人四类能力，并支持自动轮播。
+                </p>
+              </div>
+              <div className="bigscreen-controls">
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  onClick={() => setBigScreenAutoPlay((prev) => !prev)}
+                >
+                  {bigScreenAutoPlay ? "暂停轮播" : "自动轮播"}
+                </button>
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  onClick={() => void toggleBigScreenFocus()}
+                >
+                  {bigScreenFocus ? "退出全屏" : "进入全屏"}
+                </button>
+              </div>
+            </div>
+
+            <div className="bigscreen-indicators">
+              {bigScreenSlides.map((label, index) => (
+                <button
+                  key={label}
+                  type="button"
+                  className={`bigscreen-indicator ${
+                    bigScreenSlide === index ? "active" : ""
+                  }`}
+                  onClick={() => setBigScreenSlide(index)}
+                >
+                  {index + 1}. {label}
+                </button>
+              ))}
+            </div>
+
+            <section className="bigscreen-stage">
+              {bigScreenSlide === 0 ? (
+                <>
+                  <section className="kpi-grid">
+                    <article className="card">
+                      <h3>总行程数</h3>
+                      <p>{kpis.tripCount.toLocaleString()}</p>
+                    </article>
+                    <article className="card">
+                      <h3>单日峰值车辆数</h3>
+                      <p>{kpis.vehicleCount.toLocaleString()}</p>
+                    </article>
+                    <article className="card">
+                      <h3>总里程（km）</h3>
+                      <p>{kpis.distanceKm.toFixed(2)}</p>
+                    </article>
+                    <article className="card">
+                      <h3>热力日期数</h3>
+                      <p>{heatmapDateOptions.length.toLocaleString()}</p>
+                    </article>
+                  </section>
+                  <section className="panel-grid">
+                    <article className="panel panel-wide">
+                      <h4>平台状态</h4>
+                      <p className="recommend-summary">{routeStrategyHeadline}</p>
+                      <div className="recommend-stat-row">
+                        <span>最近刷新：{latestRefreshText}</span>
+                        <span>最近任务：{latestJob?.status ?? "unknown"}</span>
+                        <span>就绪资产：{assetPortalTotals.totalReadyCount}</span>
+                      </div>
+                    </article>
+                  </section>
+                </>
+              ) : null}
+
+              {bigScreenSlide === 1 ? (
+                <>
+                  <section className="kpi-grid asset-layer-grid">
+                    {assetLayerSummary.map((item) => (
+                      <article key={item.asset_layer} className="card">
+                        <h3>{item.asset_layer}</h3>
+                        <p>{item.asset_count.toLocaleString()}</p>
+                        <div className="mini-metrics">
+                          <span>就绪 {item.ready_count}</span>
+                          <span>总行数 {item.total_rows.toLocaleString()}</span>
+                          <span>完成率 {(item.completion_rate * 100).toFixed(0)}%</span>
+                        </div>
+                      </article>
+                    ))}
+                  </section>
+                  <section className="panel-grid">
+                    <article className="panel">
+                      <h4>任务与状态</h4>
+                      <p className="recommend-summary">{latestJobText}</p>
+                      <div className="recommend-reasons">
+                        {capabilityStates.map((item) => (
+                          <div key={item.label} className="recommend-reason-item">
+                            {item.label}：{item.ready ? "已就绪" : "未就绪"}
+                          </div>
+                        ))}
+                      </div>
+                    </article>
+                    <article className="panel">
+                      <h4>资产目录覆盖</h4>
+                      <div className="recommend-reasons">
+                        {metaAssets.slice(0, 6).map((asset) => (
+                          <div key={asset.asset_key} className="recommend-reason-item">
+                            {asset.display_name} · {asset.asset_layer} · {asset.status}
+                          </div>
+                        ))}
+                      </div>
+                    </article>
+                  </section>
+                </>
+              ) : null}
+
+              {bigScreenSlide === 2 ? (
+                <section className="panel-grid recommend-grid">
+                  <article className="panel">
+                    <div className="recommend-head">
+                      <h4>路径推荐</h4>
+                      <span>{routeRecommendation?.recommended_strategy ?? "待生成"}</span>
+                    </div>
+                    <p className="recommend-summary">
+                      {routeRecommendation?.summary ?? "先在推荐中心运行一次推荐，即可同步展示在大屏中。"}
+                    </p>
+                    <div className="recommend-stat-row">
+                      <span>当前时段：{routePayload.query_time?.slice(11, 16) || "--:--"}</span>
+                      <span>
+                        推荐时段：
+                        {departureRecommendation?.recommended_start_time?.slice(11, 16) ||
+                          "--:--"}
+                      </span>
+                      <span>
+                        避堵动作：
+                        {congestionRecommendation?.recommended_action ?? "待生成"}
+                      </span>
+                    </div>
+                  </article>
+                  <article className="panel panel-wide">
+                    <h4>推荐解释</h4>
+                    <div className="recommend-reasons">
+                      {(routeRecommendation?.reasons ??
+                        congestionRecommendation?.reasons ??
+                        ["推荐中心支持路径、时段和拥堵规避的可解释输出。"]).map(
+                        (reason) => (
+                          <div key={reason} className="recommend-reason-item">
+                            {reason}
+                          </div>
+                        )
+                      )}
+                    </div>
+                  </article>
+                </section>
+              ) : null}
+
+              {bigScreenSlide === 3 ? (
+                <section className="panel-grid crowd-grid">
+                  <article className="panel">
+                    <h4>圈人概览</h4>
+                    <p className="recommend-summary">{crowdHeadline}</p>
+                    <div className="recommend-stat-row">
+                      <span>画像车辆：{crowdSummary?.total_vehicle_count ?? 0}</span>
+                      <span>已打标签：{crowdSummary?.tagged_vehicle_count ?? 0}</span>
+                      <span>标签种类：{crowdSummary?.tag_count ?? 0}</span>
+                    </div>
+                    <div className="recommend-reasons">
+                      {(crowdSummary?.items ?? []).slice(0, 4).map((item) => (
+                        <div key={item.tag_code} className="recommend-reason-item">
+                          {item.tag_name} · {item.vehicle_count} 辆车
+                        </div>
+                      ))}
+                    </div>
+                  </article>
+                  <article className="panel">
+                    <h4>热点道路</h4>
+                    <div className="recommend-reasons">
+                      {crowdSegments.slice(0, 5).map((segment) => (
+                        <div
+                          key={`${segment.tag_code}-${segment.road_id ?? "unknown"}-stage`}
+                          className="recommend-reason-item"
+                        >
+                          {(segment.road_name ?? segment.road_id ?? "未知道路")} ·{" "}
+                          {segment.trip_count} 次经过
+                        </div>
+                      ))}
+                    </div>
+                  </article>
+                </section>
+              ) : null}
+            </section>
+          </section>
+        ) : null}
+
+        {activeSection === "crowd" ? (
+          <section className="crowd-panel">
+            <h4>圈人中心</h4>
+            <p className="capability-line">
+              基于 TDM 车辆画像与标签层，支持按标签筛选车辆样本和道路热点。
+            </p>
+
+            <section className="kpi-grid crowd-kpi-grid">
+              <article className="card">
+                <h3>车辆画像数</h3>
+                <p>{(crowdSummary?.total_vehicle_count ?? 0).toLocaleString()}</p>
+              </article>
+              <article className="card">
+                <h3>已打标签车辆</h3>
+                <p>{(crowdSummary?.tagged_vehicle_count ?? 0).toLocaleString()}</p>
+              </article>
+              <article className="card">
+                <h3>标签种类</h3>
+                <p>{(crowdSummary?.tag_count ?? 0).toLocaleString()}</p>
+              </article>
+            </section>
+
+            <div className="crowd-tag-strip">
+              {(crowdSummary?.items ?? []).map((item) => (
+                <button
+                  key={item.tag_code}
+                  type="button"
+                  className={`crowd-tag-chip ${
+                    (selectedCrowdTag || crowdSummary?.items?.[0]?.tag_code) === item.tag_code
+                      ? "active"
+                      : ""
+                  }`}
+                  onClick={() => setSelectedCrowdTag(item.tag_code)}
+                >
+                  <span>{item.tag_name}</span>
+                  <strong>{item.vehicle_count}</strong>
+                </button>
+              ))}
+            </div>
+
+            <section className="panel-grid crowd-grid">
+              <article className="panel">
+                <div className="crowd-panel-head">
+                  <h4>车辆样本</h4>
+                  <span>{selectedCrowdTagName}</span>
+                </div>
+                {!crowdVehicles.length ? (
+                  <div className="empty">暂无车辆标签结果</div>
+                ) : (
+                  <div className="crowd-list">
+                    {crowdVehicles.map((vehicle) => (
+                      <div key={vehicle.vehicle_id} className="crowd-list-item">
+                        <div>
+                          <strong>{vehicle.vehicle_id}</strong>
+                          <p>{vehicle.tags.join(" / ")}</p>
+                        </div>
+                        <div className="crowd-item-metrics">
+                          <span>{vehicle.trip_count} 次行程</span>
+                          <span>{vehicle.active_days} 天活跃</span>
+                          <span>{vehicle.total_distance_m.toFixed(0)} m</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </article>
+
+              <article className="panel">
+                <div className="crowd-panel-head">
+                  <h4>道路热点</h4>
+                  <span>{selectedCrowdTagName}</span>
+                </div>
+                {!crowdSegments.length ? (
+                  <div className="empty">暂无道路热点结果</div>
+                ) : (
+                  <div className="crowd-list">
+                    {crowdSegments.map((segment) => (
+                      <div
+                        key={`${segment.tag_code}-${segment.road_id ?? "unknown"}`}
+                        className="crowd-list-item"
+                      >
+                        <div>
+                          <strong>{segment.road_name ?? segment.road_id ?? "未知道路"}</strong>
+                          <p>{segment.road_id ?? "-"}</p>
+                        </div>
+                        <div className="crowd-item-metrics">
+                          <span>{segment.trip_count} 次经过</span>
+                          <span>{segment.vehicle_count} 辆车</span>
+                          <span>{segment.distance_m.toFixed(0)} m</span>
+                        </div>
+                        <div className="crowd-actions">
+                          <button
+                            type="button"
+                            className="secondary-btn"
+                            onClick={() => focusCrowdSegmentOnHeatmap(segment)}
+                            disabled={!segment.geometry}
+                          >
+                            定位到热力图
+                          </button>
+                          <button
+                            type="button"
+                            className="secondary-btn"
+                            onClick={() => applyCrowdSegmentToRoute(segment)}
+                            disabled={!segment.geometry}
+                          >
+                            设为路线终点
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </article>
+            </section>
           </section>
         ) : null}
         </div>

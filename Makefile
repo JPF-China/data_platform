@@ -58,7 +58,7 @@ test-route-pgrouting:
 	cd backend && uv sync --group dev && uv run pytest -q tests/test_route_graph_regression.py tests/test_route_database_search.py tests/test_route_capability.py
 
 test-api:
-	cd backend && uv sync --group dev && uv run pytest -q tests/test_api_regression.py tests/test_api_contract.py
+	cd backend && uv sync --group dev && uv run pytest -q tests/test_api_regression.py tests/test_api_contract.py tests/test_metadata_api.py tests/test_crowd_api.py tests/test_recommend_api.py
 
 test-db:
 	cd backend && uv sync --group dev && uv run pytest -q tests/test_data_regression.py
