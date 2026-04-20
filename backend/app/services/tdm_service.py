@@ -50,6 +50,32 @@ def ensure_tdm_ads_schema(cur: psycopg.Cursor) -> None:
           updated_at timestamptz NOT NULL DEFAULT now()
         );
 
+        CREATE TABLE IF NOT EXISTS tdm_area_activity_profile (
+          area_key text PRIMARY KEY,
+          center_lat double precision,
+          center_lon double precision,
+          active_days integer NOT NULL DEFAULT 0,
+          trip_count integer NOT NULL DEFAULT 0,
+          vehicle_count integer NOT NULL DEFAULT 0,
+          start_trip_count integer NOT NULL DEFAULT 0,
+          end_trip_count integer NOT NULL DEFAULT 0,
+          night_trip_count integer NOT NULL DEFAULT 0,
+          updated_at timestamptz NOT NULL DEFAULT now()
+        );
+
+        CREATE TABLE IF NOT EXISTS tdm_time_bucket_feature (
+          bucket_start timestamp PRIMARY KEY,
+          metric_date date NOT NULL,
+          bucket_end timestamp,
+          road_count integer NOT NULL DEFAULT 0,
+          trip_count integer NOT NULL DEFAULT 0,
+          vehicle_count integer NOT NULL DEFAULT 0,
+          flow_count integer NOT NULL DEFAULT 0,
+          avg_speed_kmh double precision,
+          congestion_road_count integer NOT NULL DEFAULT 0,
+          updated_at timestamptz NOT NULL DEFAULT now()
+        );
+
         CREATE TABLE IF NOT EXISTS ads_vehicle_tag_summary (
           tag_code text PRIMARY KEY,
           tag_name text NOT NULL,
@@ -110,6 +136,34 @@ def ensure_tdm_ads_schema(cur: psycopg.Cursor) -> None:
           audit_meta jsonb NOT NULL DEFAULT '{}'::jsonb,
           created_at timestamptz NOT NULL DEFAULT now()
         );
+
+        CREATE OR REPLACE VIEW ads_dashboard_daily AS
+        SELECT
+          metric_date,
+          trip_count,
+          vehicle_count,
+          distance_m,
+          distance_km,
+          avg_trip_distance_m,
+          median_trip_distance_m,
+          avg_speed_kmh,
+          created_at
+        FROM daily_metrics;
+
+        CREATE OR REPLACE VIEW ads_heatmap_replay AS
+        SELECT
+          id,
+          metric_date,
+          time_bucket_start,
+          time_bucket_end,
+          road_id,
+          road_name,
+          trip_count,
+          vehicle_count,
+          flow_count,
+          distance_m,
+          geom
+        FROM heatmap_bins;
         """
     )
 
@@ -413,6 +467,161 @@ def aggregate_road_profiles(cur: psycopg.Cursor) -> None:
     )
 
 
+def aggregate_area_activity_profiles(cur: psycopg.Cursor) -> None:
+    ensure_tdm_ads_schema(cur)
+    cur.execute("TRUNCATE tdm_area_activity_profile")
+    cur.execute(
+        """
+        INSERT INTO tdm_area_activity_profile (
+          area_key,
+          center_lat,
+          center_lon,
+          active_days,
+          trip_count,
+          vehicle_count,
+          start_trip_count,
+          end_trip_count,
+          night_trip_count,
+          updated_at
+        )
+        WITH start_points AS (
+          SELECT DISTINCT ON (s.trip_id)
+            t.devid AS vehicle_id,
+            t.trip_date,
+            t.start_time,
+            s.start_lat AS lat,
+            s.start_lon AS lon,
+            'start'::text AS point_kind
+          FROM trip_segments s
+          JOIN trips t ON t.id = s.trip_id
+          WHERE t.devid IS NOT NULL
+            AND t.trip_date IS NOT NULL
+            AND t.is_valid = true
+            AND s.start_lat IS NOT NULL
+            AND s.start_lon IS NOT NULL
+          ORDER BY s.trip_id, s.segment_seq
+        ),
+        end_points AS (
+          SELECT DISTINCT ON (s.trip_id)
+            t.devid AS vehicle_id,
+            t.trip_date,
+            t.start_time,
+            s.end_lat AS lat,
+            s.end_lon AS lon,
+            'end'::text AS point_kind
+          FROM trip_segments s
+          JOIN trips t ON t.id = s.trip_id
+          WHERE t.devid IS NOT NULL
+            AND t.trip_date IS NOT NULL
+            AND t.is_valid = true
+            AND s.end_lat IS NOT NULL
+            AND s.end_lon IS NOT NULL
+          ORDER BY s.trip_id, s.segment_seq DESC
+        ),
+        points AS (
+          SELECT * FROM start_points
+          UNION ALL
+          SELECT * FROM end_points
+        ),
+        gridded AS (
+          SELECT
+            CONCAT(
+              ROUND(lat::numeric, 2)::text,
+              ':',
+              ROUND(lon::numeric, 2)::text
+            ) AS area_key,
+            ROUND(lat::numeric, 2)::double precision AS center_lat,
+            ROUND(lon::numeric, 2)::double precision AS center_lon,
+            vehicle_id,
+            trip_date,
+            point_kind,
+            CASE
+              WHEN start_time IS NOT NULL
+               AND (
+                 EXTRACT(HOUR FROM start_time) >= 21
+                 OR EXTRACT(HOUR FROM start_time) < 6
+               )
+              THEN 1 ELSE 0
+            END AS night_flag
+          FROM points
+        )
+        SELECT
+          area_key,
+          center_lat,
+          center_lon,
+          COUNT(DISTINCT trip_date) AS active_days,
+          COUNT(*) AS trip_count,
+          COUNT(DISTINCT vehicle_id) AS vehicle_count,
+          COUNT(*) FILTER (WHERE point_kind = 'start') AS start_trip_count,
+          COUNT(*) FILTER (WHERE point_kind = 'end') AS end_trip_count,
+          COALESCE(SUM(night_flag), 0) AS night_trip_count,
+          now()
+        FROM gridded
+        GROUP BY area_key, center_lat, center_lon
+        ORDER BY trip_count DESC, vehicle_count DESC, area_key
+        """
+    )
+
+
+def aggregate_time_bucket_features(cur: psycopg.Cursor) -> None:
+    ensure_tdm_ads_schema(cur)
+    cur.execute("TRUNCATE tdm_time_bucket_feature")
+    cur.execute(
+        """
+        INSERT INTO tdm_time_bucket_feature (
+          bucket_start,
+          metric_date,
+          bucket_end,
+          road_count,
+          trip_count,
+          vehicle_count,
+          flow_count,
+          avg_speed_kmh,
+          congestion_road_count,
+          updated_at
+        )
+        WITH heat AS (
+          SELECT
+            time_bucket_start AS bucket_start,
+            MAX(metric_date) AS metric_date,
+            MAX(time_bucket_end) AS bucket_end,
+            COUNT(DISTINCT road_id) AS road_count,
+            COALESCE(SUM(trip_count), 0) AS trip_count,
+            COALESCE(SUM(vehicle_count), 0) AS vehicle_count,
+            COALESCE(SUM(flow_count), 0) AS flow_count
+          FROM heatmap_bins
+          GROUP BY time_bucket_start
+        ),
+        speed AS (
+          SELECT
+            bucket_start,
+            MAX(bucket_end) AS bucket_end,
+            AVG(COALESCE(median_speed_kmh, mean_speed_kmh)) AS avg_speed_kmh,
+            COUNT(DISTINCT road_id) FILTER (
+              WHERE COALESCE(median_speed_kmh, mean_speed_kmh) < 20
+            ) AS congestion_road_count
+          FROM road_speed_bins
+          GROUP BY bucket_start
+        )
+        SELECT
+          COALESCE(h.bucket_start, s.bucket_start) AS bucket_start,
+          COALESCE(h.metric_date, s.bucket_start::date) AS metric_date,
+          COALESCE(h.bucket_end, s.bucket_end) AS bucket_end,
+          COALESCE(h.road_count, 0) AS road_count,
+          COALESCE(h.trip_count, 0) AS trip_count,
+          COALESCE(h.vehicle_count, 0) AS vehicle_count,
+          COALESCE(h.flow_count, 0) AS flow_count,
+          s.avg_speed_kmh,
+          COALESCE(s.congestion_road_count, 0) AS congestion_road_count,
+          now()
+        FROM heat h
+        FULL OUTER JOIN speed s ON s.bucket_start = h.bucket_start
+        WHERE COALESCE(h.bucket_start, s.bucket_start) IS NOT NULL
+        ORDER BY COALESCE(h.bucket_start, s.bucket_start)
+        """
+    )
+
+
 def aggregate_ads_vehicle_tag_summary(cur: psycopg.Cursor) -> None:
     ensure_tdm_ads_schema(cur)
     cur.execute("TRUNCATE ads_vehicle_tag_summary")
@@ -548,6 +757,8 @@ def aggregate_tdm_and_ads_models(cur: psycopg.Cursor) -> None:
     aggregate_vehicle_profiles(cur)
     aggregate_vehicle_tags(cur)
     aggregate_road_profiles(cur)
+    aggregate_area_activity_profiles(cur)
+    aggregate_time_bucket_features(cur)
     aggregate_ads_vehicle_tag_summary(cur)
     aggregate_ads_vehicle_segments(cur)
     aggregate_ads_route_strategy(cur)

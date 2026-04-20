@@ -19,6 +19,11 @@ def test_meta_assets_returns_catalog_items(client) -> None:
         "status",
         "row_count",
     }.issubset(first.keys())
+    asset_lookup = {item["asset_key"]: item for item in body["items"]}
+    assert asset_lookup["tdm_area_activity_profile"]["asset_layer"] == "TDM"
+    assert asset_lookup["tdm_time_bucket_feature"]["asset_layer"] == "TDM"
+    assert asset_lookup["ads_daily_metrics"]["source_table"] == "ads_dashboard_daily"
+    assert asset_lookup["ads_heatmap"]["source_table"] == "ads_heatmap_replay"
 
 
 def test_meta_dates_returns_dynamic_date_ranges(client) -> None:
@@ -54,6 +59,7 @@ def test_meta_portal_summary_returns_layer_rollup(client) -> None:
         "total_rows",
         "completion_rate",
     }.issubset(first.keys())
+    assert body["total_ready_count"] == body["total_asset_count"]
 
 
 def test_meta_latest_job_returns_pipeline_status(client) -> None:

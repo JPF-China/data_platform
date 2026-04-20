@@ -106,6 +106,13 @@ const safeNum = (value: unknown): number => {
   return 0;
 };
 
+const assetStatusLabel = (status: string): string => {
+  if (status === "ready") return "已就绪";
+  if (status === "missing") return "缺失";
+  if (status === "empty") return "空表";
+  return status;
+};
+
 const tooltipTheme = {
   contentStyle: {
     background: "var(--bg-panel-soft)",
@@ -1352,7 +1359,7 @@ function App() {
                     asset.status === "ready" ? "ready" : "warning"
                   }`}
                 >
-                  {asset.status === "ready" ? "已就绪" : "空"}
+                  {assetStatusLabel(asset.status)}
                 </span>
               </div>
             ))}
@@ -1482,7 +1489,7 @@ function App() {
                           asset.status === "ready" ? "ready" : "warning"
                         }`}
                       >
-                        {asset.status}
+                        {assetStatusLabel(asset.status)}
                       </span>
                     </div>
                   </div>

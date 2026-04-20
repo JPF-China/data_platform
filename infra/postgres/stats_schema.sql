@@ -136,6 +136,32 @@ CREATE TABLE IF NOT EXISTS tdm_road_profile (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS tdm_area_activity_profile (
+  area_key text PRIMARY KEY,
+  center_lat double precision,
+  center_lon double precision,
+  active_days integer NOT NULL DEFAULT 0,
+  trip_count integer NOT NULL DEFAULT 0,
+  vehicle_count integer NOT NULL DEFAULT 0,
+  start_trip_count integer NOT NULL DEFAULT 0,
+  end_trip_count integer NOT NULL DEFAULT 0,
+  night_trip_count integer NOT NULL DEFAULT 0,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS tdm_time_bucket_feature (
+  bucket_start timestamp PRIMARY KEY,
+  metric_date date NOT NULL,
+  bucket_end timestamp,
+  road_count integer NOT NULL DEFAULT 0,
+  trip_count integer NOT NULL DEFAULT 0,
+  vehicle_count integer NOT NULL DEFAULT 0,
+  flow_count integer NOT NULL DEFAULT 0,
+  avg_speed_kmh double precision,
+  congestion_road_count integer NOT NULL DEFAULT 0,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS ads_vehicle_tag_summary (
   tag_code text PRIMARY KEY,
   tag_name text NOT NULL,
@@ -209,6 +235,34 @@ CREATE TABLE IF NOT EXISTS road_speed_bins (
   UNIQUE (road_id, bucket_start)
 );
 
+CREATE OR REPLACE VIEW ads_dashboard_daily AS
+SELECT
+  metric_date,
+  trip_count,
+  vehicle_count,
+  distance_m,
+  distance_km,
+  avg_trip_distance_m,
+  median_trip_distance_m,
+  avg_speed_kmh,
+  created_at
+FROM daily_metrics;
+
+CREATE OR REPLACE VIEW ads_heatmap_replay AS
+SELECT
+  id,
+  metric_date,
+  time_bucket_start,
+  time_bucket_end,
+  road_id,
+  road_name,
+  trip_count,
+  vehicle_count,
+  flow_count,
+  distance_m,
+  geom
+FROM heatmap_bins;
+
 CREATE INDEX IF NOT EXISTS idx_heatmap_date_time ON heatmap_bins(metric_date, time_bucket_start);
 CREATE INDEX IF NOT EXISTS idx_heatmap_geom ON heatmap_bins USING gist(geom);
 CREATE INDEX IF NOT EXISTS idx_road_speed_bins_bucket ON road_speed_bins(bucket_start, road_id);
@@ -218,6 +272,8 @@ CREATE INDEX IF NOT EXISTS idx_meta_job_status_updated ON meta_job_status(update
 CREATE INDEX IF NOT EXISTS idx_tdm_vehicle_profile_trip_count ON tdm_vehicle_profile(trip_count DESC, total_distance_m DESC);
 CREATE INDEX IF NOT EXISTS idx_tdm_vehicle_tag_tag_code ON tdm_vehicle_tag(tag_code, vehicle_id);
 CREATE INDEX IF NOT EXISTS idx_tdm_road_profile_trip_count ON tdm_road_profile(trip_count DESC, total_distance_m DESC);
+CREATE INDEX IF NOT EXISTS idx_tdm_area_activity_trip_count ON tdm_area_activity_profile(trip_count DESC, vehicle_count DESC);
+CREATE INDEX IF NOT EXISTS idx_tdm_time_bucket_metric_date ON tdm_time_bucket_feature(metric_date, bucket_start);
 CREATE INDEX IF NOT EXISTS idx_ads_vehicle_segments_tag_code ON ads_vehicle_segments(tag_code, trip_count DESC);
 CREATE INDEX IF NOT EXISTS idx_ads_route_strategy_date ON ads_route_strategy(strategy_date, recommendation_level, bucket_start);
 CREATE INDEX IF NOT EXISTS idx_ads_route_recommendation_type_date ON ads_route_recommendation(recommendation_type, travel_date, created_at DESC);

@@ -77,11 +77,27 @@ ASSET_CATALOG_DEFINITIONS: tuple[dict[str, str], ...] = (
         "description": "道路活跃度、速度和拥堵画像",
     },
     {
+        "asset_key": "tdm_area_activity_profile",
+        "display_name": "区域活跃画像",
+        "asset_layer": "TDM",
+        "asset_type": "table",
+        "source_table": "tdm_area_activity_profile",
+        "description": "按空间网格聚合的区域活跃与夜间活跃画像",
+    },
+    {
+        "asset_key": "tdm_time_bucket_feature",
+        "display_name": "时段特征画像",
+        "asset_layer": "TDM",
+        "asset_type": "table",
+        "source_table": "tdm_time_bucket_feature",
+        "description": "按时间桶聚合的流量、速度和拥堵特征画像",
+    },
+    {
         "asset_key": "ads_daily_metrics",
         "display_name": "总览指标",
         "asset_layer": "ADS",
         "asset_type": "table",
-        "source_table": "daily_metrics",
+        "source_table": "ads_dashboard_daily",
         "description": "总览 KPI 和趋势图读模型",
     },
     {
@@ -105,7 +121,7 @@ ASSET_CATALOG_DEFINITIONS: tuple[dict[str, str], ...] = (
         "display_name": "热力图回放",
         "asset_layer": "ADS",
         "asset_type": "table",
-        "source_table": "heatmap_bins",
+        "source_table": "ads_heatmap_replay",
         "description": "道路热力图时间桶读模型",
     },
     {
@@ -323,54 +339,23 @@ def refresh_metadata_snapshot(cur: psycopg.Cursor) -> None:
     table_stats = _fetch_table_row_stats(cur)
     now_utc = datetime.utcnow().isoformat()
 
-    for asset in ASSET_CATALOG_DEFINITIONS:
-        table_name = asset["source_table"]
-        exists = _table_exists_cur(cur, table_name)
-        row_count = _count_rows(cur, table_name)
-        refreshed_at = table_stats.get(table_name, {}).get("refreshed_at")
-        asset_status = "missing" if not exists else "ready" if row_count > 0 else "empty"
-        cur.execute(
-            """
-            INSERT INTO meta_asset_catalog (
-              asset_key, display_name, asset_layer, asset_type, source_table,
-              status, row_count, refreshed_at, description, details
-            ) VALUES (
-              %s, %s, %s, %s, %s,
-              %s, %s, %s, %s, %s
-            )
-            ON CONFLICT (asset_key) DO UPDATE SET
-              display_name = EXCLUDED.display_name,
-              asset_layer = EXCLUDED.asset_layer,
-              asset_type = EXCLUDED.asset_type,
-              source_table = EXCLUDED.source_table,
-              status = EXCLUDED.status,
-              row_count = EXCLUDED.row_count,
-              refreshed_at = EXCLUDED.refreshed_at,
-              description = EXCLUDED.description,
-              details = EXCLUDED.details
-            """,
-            (
-                asset["asset_key"],
-                asset["display_name"],
-                asset["asset_layer"],
-                asset["asset_type"],
-                table_name,
-                asset_status,
-                row_count,
-                refreshed_at,
-                asset["description"],
-                Json(
-                    {
-                        "table_name": table_name,
-                        "table_exists": exists,
-                        "refreshed_via": "metadata_snapshot",
-                    }
-                ),
-            ),
-        )
+    portal_asset = next(
+        asset
+        for asset in ASSET_CATALOG_DEFINITIONS
+        if asset["asset_key"] == "ads_asset_portal_summary"
+    )
 
-    summary_dates = _collect_distinct_dates(cur, "daily_metrics", "metric_date")
-    heatmap_dates = _collect_distinct_dates(cur, "heatmap_bins", "metric_date")
+    for asset in ASSET_CATALOG_DEFINITIONS:
+        if asset["asset_key"] == portal_asset["asset_key"]:
+            continue
+        _upsert_asset_snapshot_row(cur, asset, table_stats)
+
+    _refresh_asset_portal_summary(cur)
+    _upsert_asset_snapshot_row(cur, portal_asset, table_stats)
+    _refresh_asset_portal_summary(cur)
+
+    summary_dates = _collect_distinct_dates(cur, "ads_dashboard_daily", "metric_date")
+    heatmap_dates = _collect_distinct_dates(cur, "ads_heatmap_replay", "metric_date")
     route_dates = _collect_distinct_dates(
         cur, "road_speed_bins", "bucket_start::date", cast_expression=True
     )
@@ -400,7 +385,57 @@ def refresh_metadata_snapshot(cur: psycopg.Cursor) -> None:
                 Json({"checked_at": now_utc}),
             ),
         )
-    _refresh_asset_portal_summary(cur)
+
+
+def _upsert_asset_snapshot_row(
+    cur: psycopg.Cursor,
+    asset: dict[str, str],
+    table_stats: dict[str, dict[str, Any]],
+) -> None:
+    table_name = asset["source_table"]
+    exists = _table_exists_cur(cur, table_name)
+    row_count = _count_rows(cur, table_name)
+    refreshed_at = table_stats.get(table_name, {}).get("refreshed_at")
+    asset_status = "missing" if not exists else "ready" if row_count > 0 else "empty"
+    cur.execute(
+        """
+        INSERT INTO meta_asset_catalog (
+          asset_key, display_name, asset_layer, asset_type, source_table,
+          status, row_count, refreshed_at, description, details
+        ) VALUES (
+          %s, %s, %s, %s, %s,
+          %s, %s, %s, %s, %s
+        )
+        ON CONFLICT (asset_key) DO UPDATE SET
+          display_name = EXCLUDED.display_name,
+          asset_layer = EXCLUDED.asset_layer,
+          asset_type = EXCLUDED.asset_type,
+          source_table = EXCLUDED.source_table,
+          status = EXCLUDED.status,
+          row_count = EXCLUDED.row_count,
+          refreshed_at = EXCLUDED.refreshed_at,
+          description = EXCLUDED.description,
+          details = EXCLUDED.details
+        """,
+        (
+            asset["asset_key"],
+            asset["display_name"],
+            asset["asset_layer"],
+            asset["asset_type"],
+            table_name,
+            asset_status,
+            row_count,
+            refreshed_at,
+            asset["description"],
+            Json(
+                {
+                    "table_name": table_name,
+                    "table_exists": exists,
+                    "refreshed_via": "metadata_snapshot",
+                }
+            ),
+        ),
+    )
 
 
 def _refresh_asset_portal_summary(cur: psycopg.Cursor) -> None:
@@ -441,6 +476,8 @@ def _collect_distinct_dates(
     *,
     cast_expression: bool = False,
 ) -> list[str]:
+    if not _table_exists_cur(cur, table_name):
+        return []
     projection = sql.SQL(date_column) if cast_expression else sql.Identifier(date_column)
     cur.execute(
         sql.SQL("SELECT DISTINCT {} FROM {} WHERE {} IS NOT NULL ORDER BY 1").format(

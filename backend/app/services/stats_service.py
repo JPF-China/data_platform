@@ -278,9 +278,13 @@ def aggregate_table_row_stats(cur: psycopg.Cursor) -> None:
             WHEN 'tdm_vehicle_profile' THEN (SELECT COUNT(*) FROM tdm_vehicle_profile)
             WHEN 'tdm_vehicle_tag' THEN (SELECT COUNT(*) FROM tdm_vehicle_tag)
             WHEN 'tdm_road_profile' THEN (SELECT COUNT(*) FROM tdm_road_profile)
+            WHEN 'tdm_area_activity_profile' THEN (SELECT COUNT(*) FROM tdm_area_activity_profile)
+            WHEN 'tdm_time_bucket_feature' THEN (SELECT COUNT(*) FROM tdm_time_bucket_feature)
             WHEN 'ads_vehicle_tag_summary' THEN (SELECT COUNT(*) FROM ads_vehicle_tag_summary)
             WHEN 'ads_vehicle_segments' THEN (SELECT COUNT(*) FROM ads_vehicle_segments)
             WHEN 'ads_asset_portal_summary' THEN (SELECT COUNT(*) FROM ads_asset_portal_summary)
+            WHEN 'ads_dashboard_daily' THEN (SELECT COUNT(*) FROM ads_dashboard_daily)
+            WHEN 'ads_heatmap_replay' THEN (SELECT COUNT(*) FROM ads_heatmap_replay)
             WHEN 'ads_route_strategy' THEN (SELECT COUNT(*) FROM ads_route_strategy)
             WHEN 'ads_route_recommendation' THEN (SELECT COUNT(*) FROM ads_route_recommendation)
             ELSE COALESCE(s.n_live_tup::bigint, 0)
@@ -297,9 +301,13 @@ def aggregate_table_row_stats(cur: psycopg.Cursor) -> None:
             ('tdm_vehicle_profile'),
             ('tdm_vehicle_tag'),
             ('tdm_road_profile'),
+            ('tdm_area_activity_profile'),
+            ('tdm_time_bucket_feature'),
             ('ads_vehicle_tag_summary'),
             ('ads_vehicle_segments'),
             ('ads_asset_portal_summary'),
+            ('ads_dashboard_daily'),
+            ('ads_heatmap_replay'),
             ('ads_route_strategy'),
             ('ads_route_recommendation'),
             ('daily_metrics'),
