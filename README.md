@@ -49,9 +49,9 @@ cd data_platform
 
 `https://drive.usercontent.google.com/download?id=1tdgarnn28CM01o9hbeKLUiJ1o1lskrqA&export=download&authuser=0&confirm=t&uuid=2481bd7f-f21f-42a5-bb24-a8067a17356f&at=AGN2oQ3yy0IH0i35n6R_CZShxh3Y%3A1773114478451`
 
-第二份数据下载地址（Google Drive，7z；解压后目录为 `jldpath/`，包含 5 个 `*.jld2`）：
+第二份数据下载地址（Google Drive，7z；解压后目录为 `jldpath/`，包含 5 个 `*.jld2`，你补全后替换）：
 
-`https://drive.usercontent.google.com/download?id=16tHtR6McxzQYGAP_B4rO9nPRMMOuvfXH&export=download&authuser=0&confirm=t`
+`https://drive.google.com/file/d/16tHtR6McxzQYGAP_B4rO9nPRMMOuvfXH/view?usp=sharing`
 
 执行数据准备脚本（会下载、解压并把 `*.h5` 放到 `data/`、`*.jld2` 放到 `jldpath/`）：
 
@@ -123,12 +123,6 @@ SKIP_REGISTRY_CHECK=1 ./scripts/start.sh
 
 ```bash
 ./scripts/stop.sh
-```
-
-若你使用开发态 Compose 叠加文件，且本机 `5173` 已被占用，可改端口启动：
-
-```bash
-FRONTEND_DEV_PORT=5174 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 ```
 
 ## 手动启动（可选）
@@ -229,7 +223,6 @@ make smoke
 为避免文档分散，日常使用优先看本 README：
 
 - 启动、数据准备、排障、命令入口都在本文件。
-- 项目概览与开发接手说明可参考 `docs/project_overview.md`。
 - `QUICKSTART.md` 与 `DEPLOYMENT.md` 内容已并入本 README。
 
 保留的专题文档：

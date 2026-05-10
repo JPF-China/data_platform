@@ -28,7 +28,6 @@ frontend/.vite/
 !.env.example
 
 # Local data inputs (do not commit)
-.downloads/
 data/*.h5
 data/**/*.h5
 jldpath/*.jld2

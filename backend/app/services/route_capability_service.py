@@ -43,9 +43,6 @@ def get_route_capability(db: Session) -> dict[str, object]:
 
     road_segments_ready = edge_count > 0
     speed_bins_ready = speed_bins_count > 0
-    graph_ready = pgrouting_available and road_segments_ready
-    dynamic_speed_ready = speed_bins_ready
-    route_compare_ready = pgrouting_available and road_segments_ready and stats_initialized
     issues: list[str] = []
     if not pgrouting_available:
         issues.append("pgrouting extension is unavailable")
@@ -59,10 +56,7 @@ def get_route_capability(db: Session) -> dict[str, object]:
         )
 
     return {
-        "ready": route_compare_ready,
-        "graph_ready": graph_ready,
-        "dynamic_speed_ready": dynamic_speed_ready,
-        "route_compare_ready": route_compare_ready,
+        "ready": pgrouting_available and road_segments_ready and stats_initialized,
         "pgrouting_available": pgrouting_available,
         "road_segments_ready": road_segments_ready,
         "edge_count": edge_count,

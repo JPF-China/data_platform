@@ -1,58 +1,34 @@
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.db import models
+
+
 def fetch_daily_trip_count(db: Session) -> list[dict]:
     rows = (
-        db.execute(
-            text(
-                """
-                SELECT metric_date, trip_count
-                FROM ads_dashboard_daily
-                ORDER BY metric_date ASC
-                """
-            )
-        )
-        .mappings()
+        db.query(models.DailyMetric.metric_date, models.DailyMetric.trip_count)
+        .order_by(models.DailyMetric.metric_date.asc())
         .all()
     )
-    return [{"date": r["metric_date"].isoformat(), "value": r["trip_count"]} for r in rows]
+    return [{"date": r.metric_date.isoformat(), "value": r.trip_count} for r in rows]
 
 
 def fetch_daily_vehicle_count(db: Session) -> list[dict]:
     rows = (
-        db.execute(
-            text(
-                """
-                SELECT metric_date, vehicle_count
-                FROM ads_dashboard_daily
-                ORDER BY metric_date ASC
-                """
-            )
-        )
-        .mappings()
+        db.query(models.DailyMetric.metric_date, models.DailyMetric.vehicle_count)
+        .order_by(models.DailyMetric.metric_date.asc())
         .all()
     )
-    return [
-        {"date": r["metric_date"].isoformat(), "value": r["vehicle_count"]}
-        for r in rows
-    ]
+    return [{"date": r.metric_date.isoformat(), "value": r.vehicle_count} for r in rows]
 
 
 def fetch_daily_distance(db: Session) -> list[dict]:
     rows = (
-        db.execute(
-            text(
-                """
-                SELECT metric_date, distance_km
-                FROM ads_dashboard_daily
-                ORDER BY metric_date ASC
-                """
-            )
-        )
-        .mappings()
+        db.query(models.DailyMetric.metric_date, models.DailyMetric.distance_km)
+        .order_by(models.DailyMetric.metric_date.asc())
         .all()
     )
-    return [{"date": r["metric_date"].isoformat(), "value": r["distance_km"]} for r in rows]
+    return [{"date": r.metric_date.isoformat(), "value": r.distance_km} for r in rows]
 
 
 def fetch_distance_boxplot(db: Session) -> list[dict]:

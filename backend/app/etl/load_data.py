@@ -8,11 +8,9 @@ import psycopg
 
 from app.core.config import settings
 from app.services import ingest_service
-from app.services import metadata_service
 from app.services import road_mapping_service
 from app.services import road_network_service
 from app.services import stats_service
-from app.services import tdm_service
 
 
 DEFAULT_COPY_CHUNK_SIZE = 200_000
@@ -58,23 +56,6 @@ def _set_rebuild_tables_unlogged(cur: psycopg.Cursor) -> None:
         ALTER TABLE daily_speed_boxplot SET UNLOGGED;
         ALTER TABLE heatmap_bins SET UNLOGGED;
         ALTER TABLE table_row_stats SET UNLOGGED;
-        """
-    )
-
-
-def _restore_rebuild_tables_logged(cur: psycopg.Cursor) -> None:
-    cur.execute(
-        """
-        ALTER TABLE trip_points_raw SET LOGGED;
-        ALTER TABLE trip_match_meta SET LOGGED;
-        ALTER TABLE trip_points_matched SET LOGGED;
-        ALTER TABLE trip_segments SET LOGGED;
-        ALTER TABLE trips SET LOGGED;
-        ALTER TABLE daily_metrics SET LOGGED;
-        ALTER TABLE daily_distance_boxplot SET LOGGED;
-        ALTER TABLE daily_speed_boxplot SET LOGGED;
-        ALTER TABLE heatmap_bins SET LOGGED;
-        ALTER TABLE table_row_stats SET LOGGED;
         """
     )
 
@@ -140,15 +121,8 @@ def _step4_compute(cur: psycopg.Cursor) -> None:
     stats_service.aggregate_heatmap_bins(cur)
     _progress("step4/5", "rebuilding road speed bins")
     stats_service.aggregate_road_speed_bins(cur)
-    _progress("step4/5", "building TDM/ADS serving models")
-    tdm_service.aggregate_tdm_and_ads_models(cur)
     _progress("step4/5", "refreshing table row stats")
     stats_service.aggregate_table_row_stats(cur)
-
-
-def _step3_compute(cur: psycopg.Cursor) -> None:
-    # Backward-compatible helper retained for older tests and scripts.
-    _step4_compute(cur)
 
 
 def _step2_build_route_network(base_dir: Path, cur: psycopg.Cursor) -> tuple[int, int]:
@@ -281,15 +255,8 @@ def run_pipeline(
                 cur,
                 current_run_id=run_id,
             )
-            metadata_service.record_pipeline_job_started(
-                cur,
-                run_id=run_id,
-                mode=mode,
-                source_file="h5+jld2",
-            )
             conn.commit()
             lock_acquired = False
-            tables_switched_unlogged = False
 
             try:
                 ingest_counts: dict[str, int] = {
@@ -325,7 +292,6 @@ def run_pipeline(
                         _progress("step1/5", "start: set rebuild tables UNLOGGED")
                         _set_rebuild_tables_unlogged(cur)
                         conn.commit()
-                        tables_switched_unlogged = True
                         _progress("step1/5", "done: rebuild tables UNLOGGED")
 
                     lock_acquired = ingest_service.try_acquire_rebuild_lock(
@@ -438,15 +404,6 @@ def run_pipeline(
                 else:
                     raise ValueError(f"unsupported mode: {mode}")
 
-                if tables_switched_unlogged:
-                    _progress("step5/5", "start: restore LOGGED tables")
-                    _restore_rebuild_tables_logged(cur)
-                    conn.commit()
-                    tables_switched_unlogged = False
-                    _progress("step5/5", "done: restore LOGGED tables")
-
-                if mode not in {"runtime", "smoke"}:
-                    metadata_service.refresh_metadata_snapshot(cur)
                 ingest_service.finalize_pipeline_run_success(
                     cur,
                     run_id=run_id,
@@ -459,54 +416,14 @@ def run_pipeline(
                     file_shards=file_shards,
                     pg_fast_mode=pg_fast_mode,
                 )
-                metadata_service.record_pipeline_job_finished(
-                    cur,
-                    run_id=run_id,
-                    mode=mode,
-                    status="success",
-                    message=f"pipeline_{mode} completed successfully",
-                    details={
-                        "mode": mode,
-                        "ingest_counts": ingest_counts,
-                        "chunk_size": chunk_size,
-                        "workers": workers,
-                        "trip_upsert_batch_size": trip_upsert_batch_size,
-                        "source_key": source_key,
-                        "file_shards": file_shards,
-                        "pg_fast_mode": pg_fast_mode,
-                    },
-                )
                 conn.commit()
             except Exception as exc:
                 conn.rollback()
-                restore_error: str | None = None
-                if tables_switched_unlogged:
-                    try:
-                        with conn.cursor() as rcur:
-                            _restore_rebuild_tables_logged(rcur)
-                            conn.commit()
-                        tables_switched_unlogged = False
-                    except Exception as restore_exc:  # pragma: no cover - best effort
-                        conn.rollback()
-                        restore_error = str(restore_exc)
                 with conn.cursor() as ecur:
-                    error_message = str(exc)
-                    if restore_error:
-                        error_message = (
-                            f"{error_message}; failed to restore LOGGED tables: {restore_error}"
-                        )
                     ingest_service.finalize_pipeline_run_failure(
                         ecur,
                         run_id=run_id,
-                        error_message=error_message,
-                    )
-                    metadata_service.record_pipeline_job_finished(
-                        ecur,
-                        run_id=run_id,
-                        mode=mode,
-                        status="failed",
-                        message=f"pipeline_{mode} failed",
-                        details={"mode": mode, "error": error_message},
+                        error_message=str(exc),
                     )
                     conn.commit()
                 raise
