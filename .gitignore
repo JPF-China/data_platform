@@ -37,3 +37,6 @@ jldpath/**/*.jld2
 # Generated intermediates / local assets
 parquet_data/
 stitch_route_planning_optimization.zip
+
+copyright/
+slides/

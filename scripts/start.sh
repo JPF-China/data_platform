@@ -54,12 +54,18 @@ else
     COMPOSE_CMD="docker compose"
 fi
 
-has_existing_postgres_volume() {
-    local project_name
-    local volume_name
-    project_name="${COMPOSE_PROJECT_NAME:-$(basename "$ROOT_DIR")}"
-    volume_name="${project_name}_postgres_data"
-    docker volume inspect "$volume_name" >/dev/null 2>&1
+service_is_running() {
+    local service_name="$1"
+    local running_services
+    running_services="$($COMPOSE_CMD ps --services --filter status=running 2>/dev/null || true)"
+    while IFS= read -r line; do
+        if [ "$line" = "$service_name" ]; then
+            return 0
+        fi
+    done <<EOF
+$running_services
+EOF
+    return 1
 }
 
 print_frontend_only_hint() {
@@ -70,18 +76,33 @@ print_frontend_only_hint() {
     echo "   Frontend:  http://localhost:5173"
     echo ""
     echo "💡 Tips:"
-    echo "   - This is frontend-only mode (backend/postgres are not auto-started)"
+    echo "   - Frontend-only mode keeps backend/postgres unchanged"
     echo "   - Start full stack anytime: START_MODE=full ./scripts/start.sh"
     echo "   - View frontend logs: $COMPOSE_CMD logs -f frontend"
 }
 
 if [ "$START_MODE" = "auto" ]; then
-    if has_existing_postgres_volume; then
+    frontend_running=0
+    backend_running=0
+
+    if service_is_running frontend; then
+        frontend_running=1
+    fi
+
+    if service_is_running backend; then
+        backend_running=1
+    fi
+
+    if [ "$frontend_running" -eq 1 ] && [ "$backend_running" -eq 1 ]; then
+        echo "✅ Frontend and backend are already running."
+        echo "📍 Access point: http://localhost:5173"
+        exit 0
+    elif [ "$backend_running" -eq 1 ]; then
         START_MODE="frontend"
-        echo "Detected existing postgres volume, switching to frontend-only startup."
+        echo "Detected running backend, starting frontend only (database unchanged)."
     else
         START_MODE="full"
-        echo "No postgres volume detected, using full-stack startup."
+        echo "Backend is not running, starting full stack (postgres + backend + frontend)."
     fi
 fi
 
@@ -118,7 +139,7 @@ if [ "$START_MODE" = "frontend" ]; then
 fi
 
 # Start services
-echo "[1/3] Starting services with Docker..."
+echo "[1/3] Starting full stack (postgres + backend + frontend)..."
 $COMPOSE_CMD up -d
 
 echo ""

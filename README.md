@@ -83,10 +83,16 @@ make data-prepare
 
 启动逻辑（默认 `START_MODE=auto`）：
 
-- 若检测到已存在数据库卷（`*_postgres_data`），仅启动前端服务（更快复用已准备数据）。
-- 若未检测到数据库卷，启动完整服务栈（postgres + backend + frontend）。
+1. 前后端都在运行时，直接跳过，只提示已在运行并显示前端地址。
+2. 仅后端在运行时，只启动前端。
+3. 后端不在运行时，启动完整服务栈（postgres + backend + frontend）。这里的“完整”只表示把三个容器拉起来，不会重建、清空或重新导入数据库。
 
-说明：当前实现以“数据库卷存在”作为“数据库已准备好数据”的判定代理条件。
+显式模式含义：
+
+- `START_MODE=full`：启动 postgres + backend + frontend，但不做数据库重建/清空/导入。
+- `START_MODE=frontend`：只启动 frontend，不动 backend/postgres。
+
+如果前端提示 `Failed to fetch`，先检查 `backend` 是否也已启动。前端默认请求 `http://localhost:8000/api/v1`，只开前端时接口不存在，就会报这个错。
 
 可手动指定启动模式：
 
@@ -106,12 +112,12 @@ SKIP_REGISTRY_CHECK=1 ./scripts/start.sh
 
 启动后访问：
 
-- `START_MODE=full` 或 `START_MODE=auto` 且无数据库卷：
-  - 前端：http://localhost:5173
-  - 后端：http://localhost:8000
-  - 接口文档：http://localhost:8000/docs
-- `START_MODE=frontend` 或 `START_MODE=auto` 且有数据库卷：
-  - 前端：http://localhost:5173
+- `START_MODE=full` 或 `START_MODE=auto` 且后端不在运行：
+   - 前端：http://localhost:5173
+   - 后端：http://localhost:8000
+   - 接口文档：http://localhost:8000/docs
+- `START_MODE=frontend` 或 `START_MODE=auto` 且后端已在运行：
+   - 前端：http://localhost:5173
 
 停止服务：
 
