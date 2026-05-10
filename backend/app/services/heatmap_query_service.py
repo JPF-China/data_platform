@@ -4,6 +4,47 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 
+def fetch_vehicle_path(
+    db: Session,
+    vehicle_id: str,
+    metric_date: date | None = None,
+) -> list[dict]:
+    params: dict[str, object] = {"vid": vehicle_id}
+    date_filter = ""
+    if metric_date:
+        date_filter = " AND t.trip_date = :mdate"
+        params["mdate"] = metric_date
+    sql = text(f"""
+        SELECT
+          s.road_id,
+          s.road_name,
+          s.avg_speed_kmh,
+          s.start_time,
+          s.end_time,
+          s.distance_m,
+          ST_AsGeoJSON(s.path_geom) AS geom_json
+        FROM trip_segments s
+        JOIN trips t ON t.id = s.trip_id
+        WHERE t.devid = :vid
+          AND t.is_valid = true
+          AND s.path_geom IS NOT NULL{date_filter}
+        ORDER BY s.start_time
+    """)
+    rows = db.execute(sql, params).mappings().all()
+    return [
+        {
+            "road_id": r["road_id"],
+            "road_name": r["road_name"],
+            "avg_speed_kmh": float(r["avg_speed_kmh"]) if r["avg_speed_kmh"] else None,
+            "start_time": r["start_time"].isoformat(),
+            "end_time": r["end_time"].isoformat(),
+            "distance_m": float(r["distance_m"]),
+            "geometry": r["geom_json"],
+        }
+        for r in rows
+    ]
+
+
 def fetch_heatmap(
     db: Session,
     metric_date: date,

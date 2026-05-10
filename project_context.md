@@ -49,20 +49,24 @@ bfmap_ways.csv + ingest 明细 -> 路网入仓模块(road_segments, ingest_road_
 FastAPI -> React
 ```
 
-固定执行顺序：`ingest -> 路网入仓模块 -> stats -> route search`。
+固定执行顺序：`ingest -> 路网入仓模块 -> stats -> ops -> risk -> report -> governance -> route search`。
 
 ## 7. 运行模式
 
-- `rebuild`：重建明细表、路网入仓模块并刷新统计表。
-- `refresh`：复用已有明细数据，仅刷新路网映射和统计表（日常推荐）。
+- `rebuild`：重建明细表、路网入仓模块并刷新全部模块统计。
+- `refresh`：复用已有明细数据，仅刷新路网映射和全部统计（日常推荐）。
 - `optimize`：不入仓，只做数据库优化。
-- `compute`：只刷新统计表（要求路网与映射已就绪）。
+- `compute`：只刷新全部模块统计（stats → ops → risk → report → governance）。
 - `smoke`：只验证统计表和接口，不扫描大表。
+- `refresh-stats` / `refresh-ops` / `refresh-risk` / `refresh-report` / `refresh-governance`：独立模块刷新。
+- `refresh-all`：按依赖顺序执行全部模块刷新。
 
 实践建议：
 
 - 首次构建或需要重建明细时使用 `rebuild`。
 - 日常数据已存在时优先使用 `refresh`，避免重复全量入仓。
+- 需要单模块刷新的场景使用独立模块命令（如 `python -m app.etl.refresh_ops`）。
+- 定时调度可通过 `python -m app.etl.refresh_all` 执行全量刷新。
 
 ## 8. 入仓规则
 
@@ -90,12 +94,18 @@ FastAPI -> React
 - `implementation_guide.md`：表、模块、执行、依赖
 - `test_system.md`：模块测试与脚本规范
 
-## 10. 主输出
+## 11. 主输出
 
 - 热力图回放
-- 每日 trip 数
-- 每日车辆数
-- 每日里程折线图
-- 每日里程箱形图
-- 每日速度箱形图
-- 路线对比结果
+- 每日 trip 数 / vehicle 数 / 里程折线图
+- 每日里程 / 速度箱形图
+- 小时粒度交通聚合
+- 道路每日统计
+- 车辆画像与标签（通勤、夜间活跃）
+- 活跃排行与常跑路段
+- 疲劳驾驶监测（24h 滚动窗口）
+- 异常长时间运行告警
+- 夜间高风险识别
+- 日报/周报
+- 数据资产目录与质量检查
+- 路线对比结果（最短路 + 最快路）

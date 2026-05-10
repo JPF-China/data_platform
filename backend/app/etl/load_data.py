@@ -12,6 +12,13 @@ from app.services import road_mapping_service
 from app.services import road_network_service
 from app.services import stats_service
 
+from app.etl import refresh_all as _refresh_all
+from app.etl import refresh_governance as _refresh_governance
+from app.etl import refresh_ops as _refresh_ops
+from app.etl import refresh_report as _refresh_report
+from app.etl import refresh_risk as _refresh_risk
+from app.etl import refresh_stats as _refresh_stats
+
 
 DEFAULT_COPY_CHUNK_SIZE = 200_000
 DEFAULT_TRIP_UPSERT_BATCH_SIZE = 200
@@ -125,7 +132,16 @@ def _step4_compute(cur: psycopg.Cursor) -> None:
     stats_service.aggregate_table_row_stats(cur)
 
 
-def _step2_build_route_network(base_dir: Path, cur: psycopg.Cursor) -> tuple[int, int]:
+def _step4_aggregate_all(conn: psycopg.Connection) -> None:
+    """Run stats first (backward-compat), then ops/risk/report/governance."""
+    with conn.cursor() as cur:
+        _step4_compute(cur)
+        conn.commit()
+
+    _refresh_ops.refresh(conn=conn)
+    _refresh_risk.refresh(conn=conn)
+    _refresh_report.refresh(conn=conn)
+    _refresh_governance.refresh(conn=conn)
     _progress("step2/5", "start: route network ingest")
     imported = road_network_service.import_bfmap_csv(
         cur=cur, csv_path=base_dir / "bfmap_ways.csv"
@@ -343,8 +359,8 @@ def run_pipeline(
                     _step_route_ingest(base_dir, cur)
                     conn.commit()
 
-                    _progress("step4/5", "start: compute aggregate tables")
-                    _step4_compute(cur)
+                    _progress("step4/5", "start: compute all aggregate tables (stats → ops → risk → report → governance)")
+                    _step4_aggregate_all(conn)
                     _progress("step4/5", "done")
 
                     _progress("step5/5", "frontend consumes API only (no DB write)")
@@ -353,8 +369,8 @@ def run_pipeline(
                     _progress("step1/5", "skip: mode=compute")
                     _progress("step2/5", "skip: mode=compute")
                     _progress("step3/5", "skip: mode=compute")
-                    _progress("step4/5", "start: compute aggregate tables")
-                    _step4_compute(cur)
+                    _progress("step4/5", "start: compute all aggregate tables (stats → ops → risk → report → governance)")
+                    _step4_aggregate_all(conn)
                     _progress("step4/5", "done")
                     _progress("step5/5", "frontend consumes API only (no DB write)")
                     _progress("step5/5", "run: backend uvicorn + frontend npm run dev")
@@ -378,8 +394,8 @@ def run_pipeline(
                     _progress("step2/5", "done")
 
                     _progress("step3/5", "skip: mode=refresh")
-                    _progress("step4/5", "start: compute aggregate tables")
-                    _step4_compute(cur)
+                    _progress("step4/5", "start: compute all aggregate tables (stats → ops → risk → report → governance)")
+                    _step4_aggregate_all(conn)
                     _progress("step4/5", "done")
                     _progress("step5/5", "refresh mode completed")
                 elif mode == "optimize":
@@ -401,6 +417,30 @@ def run_pipeline(
                     _progress("step3/5", "skip: runtime mode")
                     _progress("step4/5", "skip: runtime mode")
                     _progress("step5/5", "runtime serves API from precomputed tables")
+                elif mode == "refresh-stats":
+                    _progress("module", "start: refresh-stats")
+                    _refresh_stats.refresh(conn=conn)
+                    _progress("module", "done: refresh-stats")
+                elif mode == "refresh-ops":
+                    _progress("module", "start: refresh-ops")
+                    _refresh_ops.refresh(conn=conn)
+                    _progress("module", "done: refresh-ops")
+                elif mode == "refresh-risk":
+                    _progress("module", "start: refresh-risk")
+                    _refresh_risk.refresh(conn=conn)
+                    _progress("module", "done: refresh-risk")
+                elif mode == "refresh-report":
+                    _progress("module", "start: refresh-report")
+                    _refresh_report.refresh(conn=conn)
+                    _progress("module", "done: refresh-report")
+                elif mode == "refresh-governance":
+                    _progress("module", "start: refresh-governance")
+                    _refresh_governance.refresh(conn=conn)
+                    _progress("module", "done: refresh-governance")
+                elif mode == "refresh-all":
+                    _progress("module", "start: refresh-all (stats → ops → risk → report → governance)")
+                    _refresh_all.refresh_all()
+                    _progress("module", "done: refresh-all")
                 else:
                     raise ValueError(f"unsupported mode: {mode}")
 
@@ -480,9 +520,15 @@ def main() -> None:
             "compute",
             "smoke",
             "runtime",
+            "refresh-stats",
+            "refresh-ops",
+            "refresh-risk",
+            "refresh-report",
+            "refresh-governance",
+            "refresh-all",
         ],
         default="runtime",
-        help="Pipeline mode: ingest|rebuild|refresh|optimize|compute|smoke|runtime",
+        help="Pipeline mode: ingest|rebuild|refresh|optimize|compute|smoke|runtime|refresh-*",
     )
     args = parser.parse_args()
     run_pipeline(

@@ -45,6 +45,8 @@ services:
     restart: unless-stopped
     volumes:
       - ./backend/app:/app/app
+      - ./backend/tests:/app/tests
+      - ./infra:/infra
       - ./data:/data:ro
       - ./jldpath:/jldpath:ro
       - ./bfmap_ways.csv:/bfmap_ways.csv:ro

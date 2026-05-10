@@ -12,6 +12,10 @@ import {
 } from "recharts";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./App.css";
+import { OpsProfileSection } from "./components/OpsProfileSection";
+import { RiskMonitoringSection } from "./components/RiskMonitoringSection";
+import { ReportingSection } from "./components/ReportingSection";
+import { GovernanceSection } from "./components/GovernanceSection";
 import {
   fetchDailyDistance,
   fetchDistanceBoxplot,
@@ -23,6 +27,7 @@ import {
   fetchSummary,
   fetchTripCount,
   fetchVehicleCount,
+  fetchVehiclePath,
   type BoxRow,
   type DailyPoint,
   type HeatItem,
@@ -30,6 +35,7 @@ import {
   type RoutePayload,
   type RouteResult,
   type SummaryRow,
+  type VehiclePathSegment,
 } from "./api";
 
 type GeoJsonSourceLike = { setData: (data: unknown) => void };
@@ -41,6 +47,8 @@ type MapInstanceLike = {
   addLayer: (layer: unknown) => void;
   getSource: (id: string) => unknown;
   getLayer: (id: string) => unknown;
+  removeLayer: (id: string) => void;
+  removeSource: (id: string) => void;
   setLayoutProperty: (id: string, name: string, value: string) => void;
   fitBounds: (bounds: MapBounds, opts: { padding: number; duration: number }) => void;
   remove: () => void;
@@ -52,7 +60,7 @@ type MaplibreModuleLike = {
   NavigationControl: new () => unknown;
 };
 type ThemeMode = "dark" | "light";
-type AppSection = "overview" | "heatmap" | "route";
+type AppSection = "overview" | "heatmap" | "route" | "ops" | "risk" | "report" | "governance";
 type RoutePickMode = "none" | "start" | "end";
 
 const tooltipValue = (value: unknown): number => {
@@ -217,6 +225,34 @@ const navItems: Array<{
     icon: "RT",
     group: "路径",
   },
+  {
+    id: "ops",
+    title: "运营画像",
+    desc: "车辆画像与活跃排行",
+    icon: "OP",
+    group: "运营",
+  },
+  {
+    id: "risk",
+    title: "风险监测",
+    desc: "疲劳与异常运行",
+    icon: "RK",
+    group: "运营",
+  },
+  {
+    id: "report",
+    title: "运营报表",
+    desc: "日报与周报",
+    icon: "RP",
+    group: "报表",
+  },
+  {
+    id: "governance",
+    title: "数据治理",
+    desc: "资产与质量",
+    icon: "GV",
+    group: "治理",
+  },
 ];
 
 const mapTileTemplates = (
@@ -257,6 +293,9 @@ function App() {
   const [bucketIndex, setBucketIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [heatData, setHeatData] = useState<HeatItem[]>([]);
+  const [vehicleId, setVehicleId] = useState("");
+  const [vehPath, setVehPath] = useState<VehiclePathSegment[] | null>(null);
+  const [vehPathLoading, setVehPathLoading] = useState(false);
   const [bbox, setBbox] = useState<{
     minLat: number;
     minLon: number;
@@ -653,6 +692,27 @@ function App() {
       src.setData({ type: "FeatureCollection", features });
     }
   }, [heatData, mapInitTick]);
+
+  // render vehicle path on heatmap
+  useEffect(() => {
+    const map = heatMapRef.current;
+    if (!map) return;
+    try { map.getSource("vehicle-path-lines"); map.removeLayer("vehicle-path-lines"); } catch { /* ok */ }
+    try { map.getSource("vehicle-path-source"); map.removeSource("vehicle-path-source"); } catch { /* ok */ }
+    if (!vehPath || vehPath.length === 0) return;
+    const features = vehPath
+      .filter((s) => s.geometry)
+      .map((s) => {
+        try {
+          const geom = JSON.parse(s.geometry);
+          return { type: "Feature", properties: { road_id: s.road_id, speed: s.avg_speed_kmh }, geometry: geom };
+        } catch { return null; }
+      })
+      .filter(Boolean);
+    if (features.length === 0) return;
+    map.addSource("vehicle-path-source", { type: "geojson", data: { type: "FeatureCollection", features } as unknown as Record<string, unknown> });
+    map.addLayer({ id: "vehicle-path-lines", type: "line", source: "vehicle-path-source", paint: { "line-color": "#dc2626", "line-width": 3, "line-opacity": 0.8 } });
+  }, [vehPath, mapInitTick]);
 
   useEffect(() => {
     const map = routeMapRef.current;
@@ -1071,7 +1131,49 @@ function App() {
               )}
             </div>
 
+            <div className="vehicle-path-search" style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8 }}>
+              <input
+                type="text"
+                placeholder="输入车辆ID查看路径..."
+                value={vehicleId}
+                onChange={(e) => setVehicleId(e.target.value)}
+                style={{ flex: 1, padding: "4px 8px", fontSize: "0.8rem" }}
+              />
+              <button
+                type="button"
+                className="secondary-btn"
+                onClick={async () => {
+                  if (!vehicleId.trim()) return;
+                  setVehPathLoading(true);
+                  try {
+                    const segments = await fetchVehiclePath(vehicleId.trim(), selectedDate);
+                    setVehPath(segments);
+                  } catch (e) {
+                    setError(e instanceof Error ? e.message : "车辆路径加载失败");
+                  } finally {
+                    setVehPathLoading(false);
+                  }
+                }}
+                disabled={vehPathLoading}
+              >
+                {vehPathLoading ? "加载中..." : "查看路径"}
+              </button>
+              {vehPath && (
+                <button type="button" className="secondary-btn" onClick={() => setVehPath(null)}>
+                  清空
+                </button>
+              )}
+              {vehPath && (
+                <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                  {vehPath.length} 段路径
+                </span>
+              )}
+            </div>
+
             <div className="map-wrap">
+
+(Showing lines 1109-1149 of 1423. Use offset=1150 to continue.)
+
               <div className="map-head">道路流量热力图（MapLibre GL）</div>
               <div ref={heatMapContainerRef} className="map-canvas" />
             </div>
@@ -1325,7 +1427,31 @@ function App() {
               </div>
             ) : null}
           </section>
-        ) : null}
+          ) : null}
+
+          {activeSection === "ops" ? (
+            <section key="ops" className="panel-fade">
+              <OpsProfileSection />
+            </section>
+          ) : null}
+
+          {activeSection === "risk" ? (
+            <section key="risk" className="panel-fade">
+              <RiskMonitoringSection />
+            </section>
+          ) : null}
+
+          {activeSection === "report" ? (
+            <section key="report" className="panel-fade">
+              <ReportingSection />
+            </section>
+          ) : null}
+
+          {activeSection === "governance" ? (
+            <section key="governance" className="panel-fade">
+              <GovernanceSection />
+            </section>
+          ) : null}
         </div>
       </section>
     </main>

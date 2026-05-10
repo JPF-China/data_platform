@@ -42,7 +42,11 @@ def _ensure_test_database() -> None:
 
 
 def _apply_schema() -> None:
-    sql_dir = Path(__file__).resolve().parents[2] / "infra" / "postgres"
+    project_root = Path(__file__).resolve().parents[2]
+    sql_dir = project_root / "infra" / "postgres"
+    fallback_dir = Path("/infra/postgres")
+    if not sql_dir.exists() and fallback_dir.exists():
+        sql_dir = fallback_dir
     with psycopg.connect(os.environ["DB_CONNINFO"]) as conn:
         with conn.cursor() as cur:
             for name in ("init.sql", "ingest_schema.sql", "stats_schema.sql"):

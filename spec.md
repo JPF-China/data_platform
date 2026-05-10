@@ -20,7 +20,11 @@
 H5/JLD2 原始文件
   -> 入仓(ingest)
   -> 路网入仓模块(road_segments, ingest_road_map)
-  -> 统计刷新(compute)
+  -> 统计刷新(stats: daily_metrics, boxplots, heatmap, speed_bins, hourly, road_daily)
+  -> 运营画像(ops: vehicle_profile, tags, ranking, frequent_routes)
+  -> 风险监测(risk: fatigue, abnormal, night_risk, summary)
+  -> 运营报表(report: daily_summary, weekly_summary)
+  -> 数据治理(governance: assets, quality, job_status)
   -> 路径搜索(route search)
   -> 在线服务(runtime)
 ```
@@ -31,9 +35,11 @@ H5/JLD2 原始文件
 - `rebuild`：总编排入口，串联入仓、路网入仓模块、统计刷新、路径能力准备与运行链路校验；其中路网构建和映射生成不单独暴露运行入口。
 - `refresh`：复用已有明细数据，只执行路网入仓模块与统计刷新（不重跑明细入仓），用于日常刷新。
 - `optimize`：不触碰源文件，只做入仓明细层的分区、索引、`VACUUM/ANALYZE` 维护。
-- `compute`：不入仓，只在路网和映射可用前提下刷新统计表。
+- `compute`：不入仓，只在路网和映射可用前提下刷新全部模块统计表（stats → ops → risk → report → governance）。
 - `smoke`：只验证统计表和 API 可用性，不扫描大表。
 - `runtime`：日常服务态，API 仅读统计表和路径结果。
+- `refresh-stats` / `refresh-ops` / `refresh-risk` / `refresh-report` / `refresh-governance`：独立模块刷新模式。
+- `refresh-all`：按依赖顺序执行全部模块刷新。
 
 ## 4. 数据分层
 
@@ -65,7 +71,38 @@ H5/JLD2 原始文件
 - `road_segments`：由 `bfmap_ways_import` 构建的 pgRouting 主图
 - `ingest_road_map`：入仓路段与 BfMap 路网边映射表
 - `route_results`：路线评估结果
+- `route_comparisons`：多策略路径对比记录
+- `route_strategies`：路径策略定义表（shortest、fastest 等）
 - 路径搜索逻辑应依赖独立的图查询数据，不直接扫业务明细表。
+
+### 4.5 运营画像层
+
+- `ops_vehicle_profile`：车辆画像（活跃天、里程、时段偏好）
+- `ops_vehicle_tag`：车辆标签（通勤、夜间活跃等）
+- `ops_vehicle_tag_summary`：标签汇总
+- `ops_frequent_route`：车辆常跑路段排名
+- `ops_activity_ranking`：活跃排行（按 trip_count / distance 双维度）
+
+### 4.6 风险监测层
+
+- `risk_driver_fatigue`：24h 窗口疲劳评估
+- `risk_driver_fatigue_event`：疲劳/严重疲劳事件
+- `risk_abnormal_running`：异常长时间运行事件
+- `risk_night_high_risk`：夜间高风险事件
+- `risk_summary`：每日风险摘要
+
+### 4.7 报表层
+
+- `report_daily_summary`：日报（聚合 stats + ops + risk）
+- `report_weekly_summary`：周报（聚合日报）
+
+### 4.8 治理层
+
+- `meta_asset_catalog`：数据资产目录（自动注册）
+- `meta_available_time_range`：数据可用时间范围
+- `meta_job_status`：任务执行状态追踪
+- `meta_data_quality_check`：数据质量检查结果
+- `ads_asset_portal_summary`：资产门户分层摘要
 
 ## 5. 表与分区建议
 
@@ -148,12 +185,53 @@ H5/JLD2 原始文件
 - 职责：展示与交互
 - 不做：直连数据库、业务计算
 
+### 6.8 运营画像模块
+
+- 输入：`trips` + `trip_segments`
+- 输出：`ops_vehicle_profile`、`ops_vehicle_tag`、`ops_vehicle_tag_summary`、`ops_frequent_route`、`ops_activity_ranking`
+- 职责：车辆画像聚合、标签生成、常跑路段排名、活跃排行
+- 关键口径：
+  - 高峰时段: 7-9AM 或 5-8PM；晨间: 6-9AM；夜间: 9PM-6AM
+  - 短途: < 5km；长途: >= 8km
+  - 通勤标签: peak_trip >= 2；夜间活跃标签: night_trip >= 1
+- 刷新入口：`python -m app.etl.refresh_ops`（独立执行）
+
+### 6.9 风险监测模块
+
+- 输入：`trips` + `trip_segments`
+- 输出：`risk_driver_fatigue`、`risk_driver_fatigue_event`、`risk_abnormal_running`、`risk_night_high_risk`、`risk_summary`
+- 职责：疲劳 24h 滚动窗口计算、异常长时间运行检测、夜间高风险识别、风险汇总
+- 关键口径：
+  - 疲劳: 24h 运行 >= 12h；严重疲劳: >= 14h
+  - 异常长时: 单次 >= 3h（中）/ 5h（高）/ 8h（严重）
+  - 夜间风险时段: 22:00-5:00；高: >= 50km；中: >= 20km
+- 刷新入口：`python -m app.etl.refresh_risk`（独立执行）
+
+### 6.10 运营报表模块
+
+- 输入：`daily_metrics`、`hourly_metrics`、`ops_vehicle_profile`、`risk_driver_fatigue`
+- 输出：`report_daily_summary`、`report_weekly_summary`
+- 职责：固定经营口径日报/周报
+- 刷新入口：`python -m app.etl.refresh_report`（独立执行）
+
+### 6.11 数据治理模块
+
+- 输入：全部表（系统目录）
+- 输出：`meta_asset_catalog`、`meta_available_time_range`、`meta_job_status`、`meta_data_quality_check`、`ads_asset_portal_summary`
+- 职责：资产自动注册、时间范围推断、任务状态追踪、质量检查（5 条规则）、门户分层摘要
+- 刷新入口：`python -m app.etl.refresh_governance`（独立执行）
+
 ## 7. 指标口径
 
 - trip 里程以分段距离累加，不允许使用首尾直线距离替代。
 - 每日 trip 数按有效 trip 去重统计。
 - 每日车辆数按 `devid` 去重统计。
 - 每日里程、箱形图、热力图均以离线预计算结果为准。
+- 疲劳评估：24h 内运行 >= 12h 为疲劳，>= 14h 为严重。
+- 异常长时间运行：单次 trip >= 3h。
+- 夜间高风险：22:00-5:00 行驶 >= 50km。
+- 常跑路段：按车辆在 road_id 上的 segment 出现次数排名。
+- 活跃排行：按 `trip_count` 和 `total_distance_m` 双维度。
 
 ## 8. API 约定
 
@@ -167,6 +245,18 @@ H5/JLD2 原始文件
 - `GET /api/v1/map/heatmap/buckets`
 - `POST /api/v1/route/compare`
 - `GET /api/v1/route/capability`
+
+**新增模块 API（待实现）**:
+- `GET /api/v1/ops/vehicle-profiles` — 车辆画像查询
+- `GET /api/v1/ops/frequent-routes` — 常跑路段
+- `GET /api/v1/ops/activity-ranking` — 活跃排行
+- `GET /api/v1/risk/fatigue` — 疲劳驾驶
+- `GET /api/v1/risk/abnormal` — 异常运行
+- `GET /api/v1/risk/summary` — 风险摘要
+- `GET /api/v1/report/daily` — 日报
+- `GET /api/v1/report/weekly` — 周报
+- `GET /api/v1/governance/assets` — 数据资产
+- `GET /api/v1/governance/quality` — 质量检查
 
 API 规则：
 

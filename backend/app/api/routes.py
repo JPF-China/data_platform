@@ -6,14 +6,24 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.schemas import (
+    AbnormalRunningResponse,
+    ActivityRankingResponse,
+    AssetCatalogResponse,
     BoxplotResponse,
     BucketsResponse,
+    DailyReportResponse,
     DateValueResponse,
+    FatigueResponse,
+    FrequentRoutesResponse,
     HeatmapResponse,
+    OpsProfilesResponse,
+    QualityCheckResponse,
+    RiskSummaryResponse,
     RouteCapabilityResponse,
     RouteCompareRequest,
     RouteCompareResponse,
     SummaryResponse,
+    WeeklyReportResponse,
 )
 from app.services.query_service import (
     fetch_daily_distance,
@@ -23,10 +33,34 @@ from app.services.query_service import (
     fetch_distance_boxplot,
     fetch_heatmap,
     fetch_heatmap_buckets,
+    fetch_vehicle_path,
     fetch_speed_boxplot,
 )
 from app.services.route_capability_service import get_route_capability
 from app.services.route_service import compare_routes
+from app.services.ops_query_service import (
+    fetch_activity_ranking,
+    fetch_frequent_routes,
+    fetch_ops_totals,
+    fetch_vehicle_profiles,
+    fetch_vehicle_tags,
+)
+from app.services.risk_query_service import (
+    fetch_abnormal_running,
+    fetch_fatigue,
+    fetch_fatigue_events,
+    fetch_night_risk,
+    fetch_risk_summary,
+)
+from app.services.report_query_service import (
+    fetch_daily_report,
+    fetch_weekly_report,
+)
+from app.services.governance_query_service import (
+    fetch_asset_catalog,
+    fetch_portal_summary,
+    fetch_quality_checks,
+)
 
 router = APIRouter()
 
@@ -177,6 +211,16 @@ def heatmap_buckets(
     )
 
 
+@router.get("/map/vehicle-path")
+def vehicle_path(
+    vehicle_id: str = Query(...),
+    metric_date: date | None = Query(None),
+    db: Session = Depends(get_db),
+):
+    items = fetch_vehicle_path(db, vehicle_id, metric_date)
+    return {"items": items}
+
+
 @router.get("/chart/daily-trip-count", response_model=DateValueResponse)
 def daily_trip_count(
     db: Session = Depends(get_db),
@@ -236,3 +280,111 @@ def route_compare(
 @router.get("/route/capability", response_model=RouteCapabilityResponse)
 def route_capability(db: Session = Depends(get_db)) -> RouteCapabilityResponse:
     return RouteCapabilityResponse.model_validate(get_route_capability(db))
+
+
+# ── ops profile ──
+
+@router.get("/ops/vehicle-profiles", response_model=OpsProfilesResponse)
+def ops_vehicle_profiles(
+    vehicle_id: str | None = Query(None),
+    tag: str | None = Query(None),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+) -> OpsProfilesResponse:
+    profiles = fetch_vehicle_profiles(db, vehicle_id=vehicle_id, tag_code=tag, limit=limit, offset=offset)
+    tags = fetch_vehicle_tags(db)
+    totals = fetch_ops_totals(db)
+    return OpsProfilesResponse.model_validate({"items": profiles, "tags": tags, **totals})
+
+
+@router.get("/ops/frequent-routes", response_model=FrequentRoutesResponse)
+def ops_frequent_routes(
+    vehicle_id: str | None = Query(None),
+    top3_only: bool = Query(False),
+    limit: int = Query(100, ge=1, le=500),
+    db: Session = Depends(get_db),
+) -> FrequentRoutesResponse:
+    items = fetch_frequent_routes(db, vehicle_id=vehicle_id, top3_only=top3_only, limit=limit)
+    return FrequentRoutesResponse.model_validate({"items": items})
+
+
+@router.get("/ops/activity-ranking", response_model=ActivityRankingResponse)
+def ops_activity_ranking(
+    category: str = Query("trip_count", pattern=r"^(trip_count|distance)$"),
+    limit: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+) -> ActivityRankingResponse:
+    items = fetch_activity_ranking(db, category=category, limit=limit)
+    return ActivityRankingResponse.model_validate({"items": items})
+
+
+# ── risk monitoring ──
+
+@router.get("/risk/fatigue", response_model=FatigueResponse)
+def risk_fatigue(
+    level: str | None = Query(None, pattern=r"^(fatigue|severe|normal)$"),
+    limit: int = Query(100, ge=1, le=500),
+    db: Session = Depends(get_db),
+) -> FatigueResponse:
+    items = fetch_fatigue(db, level=level, limit=limit)
+    events = fetch_fatigue_events(db, limit=limit)
+    return FatigueResponse.model_validate({"items": items, "events": events})
+
+
+@router.get("/risk/abnormal", response_model=AbnormalRunningResponse)
+def risk_abnormal(
+    risk_level: str | None = Query(None, pattern=r"^(moderate|high|critical)$"),
+    limit: int = Query(100, ge=1, le=500),
+    db: Session = Depends(get_db),
+) -> AbnormalRunningResponse:
+    items = fetch_abnormal_running(db, risk_level=risk_level, limit=limit)
+    return AbnormalRunningResponse.model_validate({"items": items})
+
+
+@router.get("/risk/summary", response_model=RiskSummaryResponse)
+def risk_summary(
+    db: Session = Depends(get_db),
+) -> RiskSummaryResponse:
+    items = fetch_risk_summary(db)
+    night_risk = fetch_night_risk(db, risk_level="high", limit=100)
+    return RiskSummaryResponse.model_validate({"items": items, "night_risk": night_risk})
+
+
+# ── reporting ──
+
+@router.get("/report/daily", response_model=DailyReportResponse)
+def report_daily(
+    limit: int = Query(30, ge=1, le=365),
+    db: Session = Depends(get_db),
+) -> DailyReportResponse:
+    items = fetch_daily_report(db, limit=limit)
+    return DailyReportResponse.model_validate({"items": items})
+
+
+@router.get("/report/weekly", response_model=WeeklyReportResponse)
+def report_weekly(
+    limit: int = Query(12, ge=1, le=104),
+    db: Session = Depends(get_db),
+) -> WeeklyReportResponse:
+    items = fetch_weekly_report(db, limit=limit)
+    return WeeklyReportResponse.model_validate({"items": items})
+
+
+# ── governance ──
+
+@router.get("/governance/assets", response_model=AssetCatalogResponse)
+def governance_assets(
+    db: Session = Depends(get_db),
+) -> AssetCatalogResponse:
+    items = fetch_asset_catalog(db)
+    portal = fetch_portal_summary(db)
+    return AssetCatalogResponse.model_validate({"items": items, "portal": portal})
+
+
+@router.get("/governance/quality", response_model=QualityCheckResponse)
+def governance_quality(
+    db: Session = Depends(get_db),
+) -> QualityCheckResponse:
+    items = fetch_quality_checks(db)
+    return QualityCheckResponse.model_validate({"items": items})

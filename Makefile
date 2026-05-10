@@ -1,82 +1,50 @@
-.PHONY: test smoke test-backend test-frontend test-ingest test-stats test-route test-route-pgrouting test-api test-db
-.PHONY: docker-up docker-down docker-restart docker-logs docker-build data-prepare
+.PHONY: help refresh-all refresh-stats refresh-ops refresh-risk refresh-report refresh-governance test
 
-COMPOSE := $(shell if command -v docker-compose >/dev/null 2>&1; then echo docker-compose; else echo "docker compose"; fi)
+DB_HOST ?= postgres
+DB_USER ?= postgres
+DB_PASSWORD ?= postgres
+DB_NAME ?= harbin_traffic
 
-# Docker commands
-docker-up:
-	@echo "Starting all services with Docker..."
-	$(COMPOSE) up -d
+DB_ENV := DB_HOST=$(DB_HOST) DB_USER=$(DB_USER) DB_PASSWORD=$(DB_PASSWORD) DATABASE_URL='postgresql+psycopg://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):5432/$(DB_NAME)' DB_CONNINFO='dbname=$(DB_NAME) user=$(DB_USER) host=$(DB_HOST) port=5432 password=$(DB_PASSWORD)'
 
-docker-down:
-	@echo "Stopping all services..."
-	$(COMPOSE) down
+help: ## Show this help
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
-docker-restart:
-	@echo "Restarting all services..."
-	$(COMPOSE) restart
+refresh-all: ## Run all module refreshes in order
+	docker compose exec -T backend sh -lc "$(DB_ENV) PYTHONPATH=/app uv run python -m app.etl.refresh_all"
 
-docker-logs:
-	@echo "Showing logs (press Ctrl+C to exit)..."
-	$(COMPOSE) logs -f
+refresh-stats: ## Refresh stats aggregation tables only
+	docker compose exec -T backend sh -lc "$(DB_ENV) PYTHONPATH=/app uv run python -m app.etl.refresh_stats"
 
-docker-build:
-	@echo "Building Docker images..."
-	$(COMPOSE) build --no-cache
+refresh-ops: ## Refresh ops profile tables only
+	docker compose exec -T backend sh -lc "$(DB_ENV) PYTHONPATH=/app uv run python -m app.etl.refresh_ops"
 
-docker-ps:
-	@echo "Showing running containers..."
-	$(COMPOSE) ps
+refresh-risk: ## Refresh risk monitoring tables only
+	docker compose exec -T backend sh -lc "$(DB_ENV) PYTHONPATH=/app uv run python -m app.etl.refresh_risk"
 
-data-prepare:
-	@echo "下载并准备原始数据..."
-	bash scripts/prepare_data.sh
+refresh-report: ## Refresh reporting tables only
+	docker compose exec -T backend sh -lc "$(DB_ENV) PYTHONPATH=/app uv run python -m app.etl.refresh_report"
 
-# Test commands
-test:
-	bash scripts/regression.sh
+refresh-governance: ## Refresh governance tables only
+	docker compose exec -T backend sh -lc "$(DB_ENV) PYTHONPATH=/app uv run python -m app.etl.refresh_governance"
 
-smoke:
-	bash scripts/smoke.sh
+test: ## Run all tests
+	docker compose exec -T backend sh -lc "DB_HOST=$(DB_HOST) DB_USER=$(DB_USER) DB_PASSWORD=$(DB_PASSWORD) PYTHONPATH=/app uv run pytest -q /app/tests/"
 
-test-backend:
-	cd backend && uv sync --group dev && uv run pytest -q
+test-stats: ## Run stats tests only
+	docker compose exec -T backend sh -lc "DB_HOST=$(DB_HOST) DB_USER=$(DB_USER) DB_PASSWORD=$(DB_PASSWORD) PYTHONPATH=/app uv run pytest -q /app/tests/test_stats_agg_extended.py"
 
-test-frontend:
-	cd frontend && npm run test && npm run build
+test-ops: ## Run ops profile tests only
+	docker compose exec -T backend sh -lc "DB_HOST=$(DB_HOST) DB_USER=$(DB_USER) DB_PASSWORD=$(DB_PASSWORD) PYTHONPATH=/app uv run pytest -q /app/tests/test_ops_profile_schema.py /app/tests/test_ops_profile_extended.py /app/tests/test_ops_refresh_functions.py"
 
-test-ingest:
-	cd backend && uv sync --group dev && uv run pytest -q tests/test_ingest_pipeline.py tests/test_ingest_validation.py
+test-risk: ## Run risk tests only
+	docker compose exec -T backend sh -lc "DB_HOST=$(DB_HOST) DB_USER=$(DB_USER) DB_PASSWORD=$(DB_PASSWORD) PYTHONPATH=/app uv run pytest -q /app/tests/test_risk_monitoring_schema.py /app/tests/test_risk_monitoring_extended.py /app/tests/test_risk_refresh_functions.py"
 
-test-stats:
-	cd backend && uv sync --group dev && uv run pytest -q tests/test_stats_refresh.py tests/test_data_regression.py
+test-report: ## Run report tests only
+	docker compose exec -T backend sh -lc "DB_HOST=$(DB_HOST) DB_USER=$(DB_USER) DB_PASSWORD=$(DB_PASSWORD) PYTHONPATH=/app uv run pytest -q /app/tests/test_reports_schema.py"
 
-test-route:
-	cd backend && uv sync --group dev && uv run pytest -q tests/test_route_graph_regression.py tests/test_route_database_search.py tests/test_route_capability.py
+test-governance: ## Run governance tests only
+	docker compose exec -T backend sh -lc "DB_HOST=$(DB_HOST) DB_USER=$(DB_USER) DB_PASSWORD=$(DB_PASSWORD) PYTHONPATH=/app uv run pytest -q /app/tests/test_governance_schema.py /app/tests/test_governance_refresh.py"
 
-test-route-pgrouting:
-	cd backend && uv sync --group dev && uv run pytest -q tests/test_route_graph_regression.py tests/test_route_database_search.py tests/test_route_capability.py
-
-test-api:
-	cd backend && uv sync --group dev && uv run pytest -q tests/test_api_regression.py tests/test_api_contract.py
-
-test-db:
-	cd backend && uv sync --group dev && uv run pytest -q tests/test_data_regression.py
-
-# Default target
-default:
-	@echo "Harbin Traffic Analytics - Available commands:"
-	@echo ""
-	@echo "Docker commands:"
-	@echo "  make docker-up      - Start all services"
-	@echo "  make docker-down    - Stop all services"
-	@echo "  make docker-restart - Restart all services"
-	@echo "  make docker-logs    - Show logs"
-	@echo "  make docker-build   - Rebuild images"
-	@echo "  make docker-ps      - Show container status"
-	@echo ""
-	@echo "Test commands:"
-	@echo "  make test         - Run all tests"
-	@echo "  make smoke        - Run smoke tests"
-	@echo "  make test-backend - Run backend tests"
-	@echo "  make test-frontend- Run frontend tests"
+test-route: ## Run route tests only
+	docker compose exec -T backend sh -lc "DB_HOST=$(DB_HOST) DB_USER=$(DB_USER) DB_PASSWORD=$(DB_PASSWORD) PYTHONPATH=/app uv run pytest -q /app/tests/test_route_analysis_schema.py"

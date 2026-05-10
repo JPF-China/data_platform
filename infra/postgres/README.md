@@ -9,7 +9,7 @@
 
 - `init.sql`：基础扩展 + 路网/路径核心表（不含入仓与统计明细）
 - `ingest_schema.sql`：入仓链路表与索引
-- `stats_schema.sql`：统计链路表与索引
+- `stats_schema.sql`：统计链路、运营画像、风险监测、报表、治理与路线分析表与索引（约 35+ 张表，17 个刷新函数）
 - `bootstrap.sql`：统一入口，按顺序加载以上三个脚本
 
 ## 生产/存量库迁移（时区无关 datetime）
