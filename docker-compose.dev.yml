@@ -14,8 +14,8 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     command: npm run dev -- --host 0.0.0.0
-    ports:
-      - "5173:5173"
+    ports: !override
+      - "${FRONTEND_DEV_PORT:-5173}:5173"
     volumes:
       - ./frontend/src:/app/src
       - ./frontend/public:/app/public

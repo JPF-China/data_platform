@@ -1,0 +1,102 @@
+- main [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: DP
+      - generic [ref=e7]: 哈尔滨车辆行程分析平台
+    - generic [ref=e9]:
+      - generic [ref=e10]: ⌕
+      - searchbox [ref=e11]
+    - generic [ref=e12]:
+      - generic [ref=e13]: 暂无
+      - generic [ref=e14]: 待初始化
+  - complementary [ref=e15]:
+    - generic [ref=e16]:
+      - paragraph [ref=e17]: Workspace
+      - heading "工作台" [level=1] [ref=e18]
+    - navigation "仪表盘模块导航" [ref=e19]:
+      - generic [ref=e20]:
+        - paragraph [ref=e21]: 门户
+        - button "数据状态 刷新、任务与能力检查" [ref=e22] [cursor=pointer]:
+          - generic [ref=e23]: ST
+          - generic [ref=e24]:
+            - generic [ref=e25]: 数据状态
+            - generic [ref=e26]: 刷新、任务与能力检查
+        - button "资产门户 四层资产与状态总览" [ref=e27] [cursor=pointer]:
+          - generic [ref=e28]: AS
+          - generic [ref=e29]:
+            - generic [ref=e30]: 资产门户
+            - generic [ref=e31]: 四层资产与状态总览
+      - generic [ref=e32]:
+        - paragraph [ref=e33]: 分析
+        - button "总览 核心指标、趋势与箱线图" [ref=e34] [cursor=pointer]:
+          - generic [ref=e35]: OV
+          - generic [ref=e36]:
+            - generic [ref=e37]: 总览
+            - generic [ref=e38]: 核心指标、趋势与箱线图
+        - button "热力回放 道路流量时间桶" [ref=e39] [cursor=pointer]:
+          - generic [ref=e40]: HM
+          - generic [ref=e41]:
+            - generic [ref=e42]: 热力回放
+            - generic [ref=e43]: 道路流量时间桶
+      - generic [ref=e44]:
+        - paragraph [ref=e45]: 路径
+        - button "路径对比 最短路与最快路" [ref=e46] [cursor=pointer]:
+          - generic [ref=e47]: RT
+          - generic [ref=e48]:
+            - generic [ref=e49]: 路径对比
+            - generic [ref=e50]: 最短路与最快路
+        - button "推荐中心 路径、时段与避堵建议" [ref=e51] [cursor=pointer]:
+          - generic [ref=e52]: RC
+          - generic [ref=e53]:
+            - generic [ref=e54]: 推荐中心
+            - generic [ref=e55]: 路径、时段与避堵建议
+      - generic [ref=e56]:
+        - paragraph [ref=e57]: 圈人
+        - button "圈人中心 车辆标签与道路热点" [ref=e58] [cursor=pointer]:
+          - generic [ref=e59]: CD
+          - generic [ref=e60]:
+            - generic [ref=e61]: 圈人中心
+            - generic [ref=e62]: 车辆标签与道路热点
+    - generic [ref=e63]:
+      - generic [ref=e64]: 主题
+      - group "主题切换" [ref=e65]:
+        - button "浅色" [pressed] [ref=e66] [cursor=pointer]
+        - button "深色" [ref=e67] [cursor=pointer]
+  - generic [ref=e68]:
+    - generic [ref=e69]:
+      - heading "数据状态" [level=2] [ref=e70]
+      - paragraph [ref=e71]: 基于 H5 + JLD2 合并入仓，依托 PostGIS 统计能力，支持最短路与最快路的路径对比。
+      - generic [ref=e72]:
+        - generic [ref=e73]: 热力图日期数：0
+        - generic [ref=e74]: 最近刷新：暂无
+    - status [ref=e75]: 正在加载后端数据...
+    - generic [ref=e77]:
+      - generic [ref=e78]:
+        - article [ref=e79]:
+          - heading "最近刷新" [level=3] [ref=e80]
+          - paragraph [ref=e81]: 暂无
+        - article [ref=e82]:
+          - heading "就绪资产" [level=3] [ref=e83]
+          - paragraph [ref=e84]: 0/0
+        - article [ref=e85]:
+          - heading "总行数" [level=3] [ref=e86]
+          - paragraph [ref=e87]: "0"
+      - generic [ref=e88]:
+        - article [ref=e89]:
+          - generic [ref=e90]:
+            - heading "任务状态" [level=4] [ref=e91]
+            - generic [ref=e92]: unknown
+          - paragraph [ref=e93]: 暂无任务记录
+          - generic [ref=e94]:
+            - generic [ref=e95]: 任务：暂无
+            - generic [ref=e96]: 开始：暂无
+            - generic [ref=e97]: 结束：暂无
+        - article [ref=e98]:
+          - generic [ref=e99]:
+            - heading "路径能力" [level=4] [ref=e100]
+            - generic [ref=e101]: 待初始化
+          - generic [ref=e102]:
+            - generic [ref=e103]: 图可用：未就绪
+            - generic [ref=e104]: 动态速度：未就绪
+            - generic [ref=e105]: 路径对比：未就绪
+      - heading "资产状态" [level=4] [ref=e107]

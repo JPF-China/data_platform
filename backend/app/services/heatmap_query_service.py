@@ -42,7 +42,7 @@ def fetch_heatmap(
           time_bucket_start,
           time_bucket_end,
           ST_AsGeoJSON(geom) AS geom_json
-        FROM heatmap_bins
+        FROM ads_heatmap_replay
         WHERE metric_date = :metric_date
           AND time_bucket_start = :bucket_start
           {where_extra}
@@ -72,7 +72,7 @@ def fetch_heatmap_buckets(db: Session, metric_date: date) -> list[str]:
     sql = text(
         """
         SELECT DISTINCT time_bucket_start
-        FROM heatmap_bins
+        FROM ads_heatmap_replay
         WHERE metric_date = :metric_date
         ORDER BY time_bucket_start
         """

@@ -1,0 +1,132 @@
+- main [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: DP
+      - generic [ref=e7]: 哈尔滨车辆行程分析平台
+    - generic [ref=e8]:
+      - generic [ref=e9]: ⌕
+      - searchbox [ref=e10]
+    - generic [ref=e11]:
+      - generic [ref=e12]: 2026-04-20 03:40
+      - generic [ref=e13]: 路径可用
+  - complementary [ref=e14]:
+    - generic [ref=e15]:
+      - paragraph [ref=e16]: Workspace
+      - heading "工作台" [level=1] [ref=e17]
+    - navigation "仪表盘模块导航" [ref=e18]:
+      - generic [ref=e19]:
+        - paragraph [ref=e20]: 门户
+        - button "数据状态 刷新、任务与能力检查" [ref=e21] [cursor=pointer]:
+          - generic [ref=e22]: ST
+          - generic [ref=e23]:
+            - generic [ref=e24]: 数据状态
+            - generic [ref=e25]: 刷新、任务与能力检查
+        - button "资产门户 四层资产与状态总览" [ref=e26] [cursor=pointer]:
+          - generic [ref=e27]: AS
+          - generic [ref=e28]:
+            - generic [ref=e29]: 资产门户
+            - generic [ref=e30]: 四层资产与状态总览
+      - generic [ref=e31]:
+        - paragraph [ref=e32]: 分析
+        - button "总览 核心指标、趋势与箱线图" [ref=e33] [cursor=pointer]:
+          - generic [ref=e34]: OV
+          - generic [ref=e35]:
+            - generic [ref=e36]: 总览
+            - generic [ref=e37]: 核心指标、趋势与箱线图
+        - button "热力回放 道路流量时间桶" [ref=e38] [cursor=pointer]:
+          - generic [ref=e39]: HM
+          - generic [ref=e40]:
+            - generic [ref=e41]: 热力回放
+            - generic [ref=e42]: 道路流量时间桶
+      - generic [ref=e43]:
+        - paragraph [ref=e44]: 路径
+        - button "路径对比 最短路与最快路" [ref=e45] [cursor=pointer]:
+          - generic [ref=e46]: RT
+          - generic [ref=e47]:
+            - generic [ref=e48]: 路径对比
+            - generic [ref=e49]: 最短路与最快路
+        - button "推荐中心 路径、时段与避堵建议" [active] [ref=e50] [cursor=pointer]:
+          - generic [ref=e51]: RC
+          - generic [ref=e52]:
+            - generic [ref=e53]: 推荐中心
+            - generic [ref=e54]: 路径、时段与避堵建议
+      - generic [ref=e55]:
+        - paragraph [ref=e56]: 圈人
+        - button "圈人中心 车辆标签与道路热点" [ref=e57] [cursor=pointer]:
+          - generic [ref=e58]: CD
+          - generic [ref=e59]:
+            - generic [ref=e60]: 圈人中心
+            - generic [ref=e61]: 车辆标签与道路热点
+    - generic [ref=e62]:
+      - generic [ref=e63]: 主题
+      - group "主题切换" [ref=e64]:
+        - button "浅色" [pressed] [ref=e65] [cursor=pointer]
+        - button "深色" [ref=e66] [cursor=pointer]
+  - generic [ref=e67]:
+    - generic [ref=e68]:
+      - heading "推荐中心" [level=2] [ref=e268]
+      - paragraph [ref=e70]: 基于 H5 + JLD2 合并入仓，依托 PostGIS 统计能力，支持最短路与最快路的路径对比。
+      - generic [ref=e71]:
+        - generic [ref=e72]: 热力图日期数：5
+        - generic [ref=e73]: 最近刷新：2026-04-20 03:40
+    - generic [ref=e270]:
+      - heading "推荐中心" [level=4] [ref=e271]
+      - paragraph [ref=e272]: 输出三类建议：路径推荐、出发时段推荐、拥堵规避建议。
+      - generic [ref=e273]:
+        - generic [ref=e274]:
+          - generic [ref=e275]:
+            - generic [ref=e276]:
+              - text: 起始时间
+              - textbox "起始时间" [ref=e277]: 2015-01-03T08:00
+            - generic [ref=e278]:
+              - text: 查询时间
+              - textbox "查询时间" [ref=e279]: 2015-01-03T08:00
+            - generic [ref=e280]:
+              - text: 起点纬度
+              - spinbutton "起点纬度" [ref=e281]: "45.756"
+            - generic [ref=e282]:
+              - text: 起点经度
+              - spinbutton "起点经度" [ref=e283]: "126.642"
+            - generic [ref=e284]:
+              - text: 终点纬度
+              - spinbutton "终点纬度" [ref=e285]: "45.721"
+            - generic [ref=e286]:
+              - text: 终点经度
+              - spinbutton "终点经度" [ref=e287]: "126.588"
+          - generic [ref=e288]:
+            - generic [ref=e289]: 地图选点
+            - button "选择起点" [ref=e290] [cursor=pointer]
+            - button "选择终点" [ref=e291] [cursor=pointer]
+            - generic [ref=e292]: 选择模式后点击地图回填坐标
+        - generic [ref=e293]:
+          - generic [ref=e295]: 推荐选点地图（MapLibre GL）
+          - application "推荐选点地图（MapLibre GL）地图展示区域" [ref=e297]:
+            - region "Map" [ref=e298]
+            - generic:
+              - generic [ref=e299]:
+                - button "Zoom in" [ref=e300] [cursor=pointer]
+                - button "Zoom out" [ref=e302] [cursor=pointer]
+                - button "Drag to rotate map, click to reset north" [ref=e304]
+              - group [ref=e306]:
+                - generic "Toggle attribution" [ref=e307] [cursor=pointer]
+                - generic [ref=e308]:
+                  - text: © OpenStreetMap contributors |
+                  - link "MapLibre" [ref=e309] [cursor=pointer]:
+                    - /url: https://maplibre.org/
+      - button "生成推荐方案" [ref=e310] [cursor=pointer]
+      - generic [ref=e311]:
+        - article [ref=e312]:
+          - generic [ref=e313]:
+            - heading "路径推荐" [level=4] [ref=e314]
+            - generic [ref=e315]: 未生成
+          - generic [ref=e316]: 暂无路径推荐结果
+        - article [ref=e317]:
+          - generic [ref=e318]:
+            - heading "出发时段推荐" [level=4] [ref=e319]
+            - generic [ref=e320]: 未生成
+          - generic [ref=e321]: 暂无时段推荐结果
+        - article [ref=e322]:
+          - generic [ref=e323]:
+            - heading "拥堵规避建议" [level=4] [ref=e324]
+            - generic [ref=e325]: 未生成
+          - generic [ref=e326]: 暂无拥堵规避建议

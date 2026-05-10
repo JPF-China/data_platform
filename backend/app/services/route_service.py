@@ -13,7 +13,12 @@ from app.services.route_search_service import (
 )
 
 
-def compare_routes(db: Session, payload: RouteCompareRequest) -> RouteCompareResponse:
+def compute_route_comparison(
+    db: Session,
+    payload: RouteCompareRequest,
+    *,
+    persist: bool,
+) -> tuple[RouteCompareResponse, dict[str, object]]:
     ensure_routing_ready(db)
 
     payload = RouteCompareRequest(
@@ -61,11 +66,12 @@ def compare_routes(db: Session, payload: RouteCompareRequest) -> RouteCompareRes
             use_step_cost_for_time=False,
         )
 
-    persist_route(db, payload, "shortest", shortest_route)
-    persist_route(db, payload, "fastest", fastest_route)
-    db.commit()
+    if persist:
+        persist_route(db, payload, "shortest", shortest_route)
+        persist_route(db, payload, "fastest", fastest_route)
+        db.commit()
 
-    return RouteCompareResponse(
+    response = RouteCompareResponse(
         start_time=payload.start_time.isoformat(),
         query_time=payload.query_time.isoformat(),
         query_bucket_start=bucket_start.isoformat(),
@@ -88,3 +94,21 @@ def compare_routes(db: Session, payload: RouteCompareRequest) -> RouteCompareRes
         shortest_route=shortest_route,
         fastest_route=fastest_route,
     )
+    route_overlap = shortest_route.path_wkt_segments == fastest_route.path_wkt_segments
+    return response, {
+        "used_dynamic_speed": use_speed_bins,
+        "fallback_mode": "dynamic_speed" if use_speed_bins else "static_weights",
+        "route_overlap": route_overlap,
+        "bucket_start": bucket_start.isoformat(),
+        "time_delta_s": round(
+            shortest_route.estimated_time_s - fastest_route.estimated_time_s, 3
+        ),
+        "distance_delta_m": round(
+            fastest_route.distance_m - shortest_route.distance_m, 3
+        ),
+    }
+
+
+def compare_routes(db: Session, payload: RouteCompareRequest) -> RouteCompareResponse:
+    response, _ = compute_route_comparison(db, payload, persist=True)
+    return response

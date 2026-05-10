@@ -6,7 +6,7 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
 MAIN_URL_DEFAULT="https://drive.usercontent.google.com/download?id=1tdgarnn28CM01o9hbeKLUiJ1o1lskrqA&export=download&authuser=0&confirm=t&uuid=2481bd7f-f21f-42a5-bb24-a8067a17356f&at=AGN2oQ3yy0IH0i35n6R_CZShxh3Y%3A1773114478451"
-EXTRA_URL_DEFAULT="https://drive.google.com/file/d/16tHtR6McxzQYGAP_B4rO9nPRMMOuvfXH/view?usp=sharing"
+EXTRA_URL_DEFAULT="https://drive.usercontent.google.com/download?id=16tHtR6McxzQYGAP_B4rO9nPRMMOuvfXH&export=download&authuser=0&confirm=t"
 MAIN_ARCHIVE_FORMAT_DEFAULT="zip"
 EXTRA_ARCHIVE_FORMAT_DEFAULT="7z"
 EXPECTED_H5_COUNT_DEFAULT="5"
@@ -30,6 +30,16 @@ if ! command -v 7z >/dev/null 2>&1; then
     exit 1
 fi
 
+normalize_google_drive_url() {
+    local url="$1"
+    if [[ "$url" =~ ^https://drive\.google\.com/file/d/([^/]+)/view ]]; then
+        local file_id="${BASH_REMATCH[1]}"
+        echo "https://drive.usercontent.google.com/download?id=${file_id}&export=download&authuser=0&confirm=t"
+        return
+    fi
+    echo "$url"
+}
+
 download_and_extract() {
     local url="$1"
     local name="$2"
@@ -42,11 +52,14 @@ download_and_extract() {
 
     local archive="$DOWNLOAD_DIR/$name.$fmt"
     local target="$WORK_DIR/$name"
+    local normalized_url
+
+    normalized_url="$(normalize_google_drive_url "$url")"
 
     mkdir -p "$target"
 
     echo "下载 $name ..."
-    curl -L -C - "$url" -o "$archive"
+    curl -L -C - "$normalized_url" -o "$archive"
 
     echo "解压 $name ..."
     rm -rf "$target"
