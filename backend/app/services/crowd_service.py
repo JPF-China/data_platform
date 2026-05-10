@@ -180,19 +180,38 @@ def fetch_crowd_vehicles(
     ]
 
 
+def _crowd_segment_from_row(row: Any) -> dict[str, Any]:
+    return {
+        "tag_code": row["tag_code"],
+        "tag_name": row["tag_name"],
+        "road_id": row["road_id"],
+        "road_name": row["road_name"],
+        "trip_count": int(row["trip_count"]),
+        "vehicle_count": int(row["vehicle_count"]),
+        "distance_m": float(row["distance_m"]),
+        "avg_speed_kmh": float(row["avg_speed_kmh"])
+        if row["avg_speed_kmh"] is not None
+        else None,
+        "geometry": row["geometry"],
+        "updated_at": row["updated_at"].isoformat()
+        if row["updated_at"] is not None
+        else None,
+    }
+
+
 def fetch_crowd_segments(
     db: Session,
     *,
     tag_code: str | None = None,
     limit: int = 10,
+    include_geometry: bool = False,
 ) -> list[dict[str, Any]]:
     if not _table_exists(db, "ads_vehicle_segments"):
         return []
 
-    include_geometry = _table_exists(db, "trip_segments")
     params: dict[str, Any] = {"limit": limit}
 
-    if include_geometry:
+    if include_geometry and _table_exists(db, "trip_segments"):
         if tag_code:
             params["tag_code"] = tag_code
             stmt = text(
@@ -217,7 +236,8 @@ def fetch_crowd_segments(
                   SELECT
                     ts.road_id,
                     ST_AsGeoJSON(
-                      ST_Multi(ST_LineMerge(ST_Collect(s.path_geom)))
+                      ST_Multi(ST_LineMerge(ST_Collect(s.path_geom))),
+                      6
                     ) AS geometry
                   FROM top_segments ts
                   LEFT JOIN trip_segments s
@@ -263,7 +283,8 @@ def fetch_crowd_segments(
                   SELECT
                     ts.road_id,
                     ST_AsGeoJSON(
-                      ST_Multi(ST_LineMerge(ST_Collect(s.path_geom)))
+                      ST_Multi(ST_LineMerge(ST_Collect(s.path_geom))),
+                      6
                     ) AS geometry
                   FROM top_segments ts
                   LEFT JOIN trip_segments s
@@ -330,22 +351,137 @@ def fetch_crowd_segments(
             )
 
     rows = db.execute(stmt, params).mappings().all()
-    return [
-        {
-            "tag_code": row["tag_code"],
-            "tag_name": row["tag_name"],
-            "road_id": row["road_id"],
-            "road_name": row["road_name"],
-            "trip_count": int(row["trip_count"]),
-            "vehicle_count": int(row["vehicle_count"]),
-            "distance_m": float(row["distance_m"]),
-            "avg_speed_kmh": float(row["avg_speed_kmh"])
-            if row["avg_speed_kmh"] is not None
-            else None,
-            "geometry": row["geometry"],
-            "updated_at": row["updated_at"].isoformat()
-            if row["updated_at"] is not None
-            else None,
-        }
-        for row in rows
-    ]
+    return [_crowd_segment_from_row(row) for row in rows]
+
+
+def fetch_crowd_segment_geometry(
+    db: Session,
+    *,
+    road_id: str,
+    simplify_tolerance: float = 0.0001,
+) -> dict[str, Any] | None:
+    if not road_id:
+        return None
+
+    if _table_exists(db, "ads_road_geometry"):
+        row = (
+            db.execute(
+                text(
+                    """
+                    SELECT
+                      road_id,
+                      road_name,
+                      COALESCE(
+                        NULLIF(simplified_geojson, ''),
+                        NULLIF(geometry_geojson, ''),
+                        CASE
+                          WHEN geometry IS NOT NULL THEN ST_AsGeoJSON(geometry, 6)
+                          ELSE NULL
+                        END
+                      ) AS geometry,
+                      source_segment_count
+                    FROM ads_road_geometry
+                    WHERE road_id = :road_id
+                    """
+                ),
+                {"road_id": road_id},
+            )
+            .mappings()
+            .first()
+        )
+        if row and row["geometry"]:
+            return {
+                "road_id": row["road_id"],
+                "road_name": row["road_name"],
+                "geometry": row["geometry"],
+                "source": "ads_road_geometry",
+                "source_segment_count": int(row["source_segment_count"])
+                if row["source_segment_count"] is not None
+                else None,
+            }
+
+    if _table_exists(db, "heatmap_bins"):
+        row = (
+            db.execute(
+                text(
+                    """
+                    SELECT
+                      road_id,
+                      road_name,
+                      ST_AsGeoJSON(
+                        ST_Multi(
+                          ST_SimplifyPreserveTopology(geom, :simplify_tolerance)
+                        ),
+                        6
+                      ) AS geometry,
+                      COUNT(*) OVER ()::bigint AS source_segment_count
+                    FROM heatmap_bins
+                    WHERE road_id = :road_id
+                      AND geom IS NOT NULL
+                    ORDER BY flow_count DESC, trip_count DESC, time_bucket_start
+                    LIMIT 1
+                    """
+                ),
+                {
+                    "road_id": road_id,
+                    "simplify_tolerance": simplify_tolerance,
+                },
+            )
+            .mappings()
+            .first()
+        )
+        if row and row["geometry"]:
+            return {
+                "road_id": row["road_id"],
+                "road_name": row["road_name"],
+                "geometry": row["geometry"],
+                "source": "heatmap_bins",
+                "source_segment_count": int(row["source_segment_count"])
+                if row["source_segment_count"] is not None
+                else None,
+            }
+
+    if not _table_exists(db, "trip_segments"):
+        return None
+
+    row = (
+        db.execute(
+            text(
+                """
+                SELECT
+                  :road_id AS road_id,
+                  MAX(road_name) AS road_name,
+                  ST_AsGeoJSON(
+                    ST_Multi(
+                      ST_SimplifyPreserveTopology(
+                        ST_LineMerge(ST_Collect(path_geom)),
+                        :simplify_tolerance
+                      )
+                    ),
+                    6
+                  ) AS geometry,
+                  COUNT(*)::bigint AS source_segment_count
+                FROM trip_segments
+                WHERE road_id = :road_id
+                  AND path_geom IS NOT NULL
+                """
+            ),
+            {
+                "road_id": road_id,
+                "simplify_tolerance": simplify_tolerance,
+            },
+        )
+        .mappings()
+        .first()
+    )
+    if not row or not row["geometry"]:
+        return None
+    return {
+        "road_id": row["road_id"],
+        "road_name": row["road_name"],
+        "geometry": row["geometry"],
+        "source": "trip_segments",
+        "source_segment_count": int(row["source_segment_count"])
+        if row["source_segment_count"] is not None
+        else None,
+    }

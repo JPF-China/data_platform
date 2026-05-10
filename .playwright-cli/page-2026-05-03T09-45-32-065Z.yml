@@ -1,0 +1,128 @@
+- main [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - paragraph [ref=e6]: 哈尔滨车辆行程分析平台
+      - heading "工作台" [level=1] [ref=e7]
+      - paragraph [ref=e8]: 点击左侧模块，聚焦单一业务流程。
+    - generic [ref=e9]:
+      - generic [ref=e10]:
+        - heading "数据状态" [level=3] [ref=e11]
+        - generic [ref=e12]: 待初始化
+      - generic [ref=e13]:
+        - generic [ref=e14]:
+          - generic [ref=e15]: 最近刷新
+          - strong [ref=e16]: 2026-04-20 03:40
+        - generic [ref=e17]:
+          - generic [ref=e18]: 就绪资产
+          - strong [ref=e19]: 20/20
+        - generic [ref=e20]:
+          - generic [ref=e21]: 最近任务
+          - strong [ref=e22]: 运行中 · pipeline_compute started
+      - generic [ref=e23]:
+        - generic [ref=e24]:
+          - generic [ref=e25]:
+            - generic [ref=e26]: 采集任务登记
+            - generic [ref=e27]: ODS
+          - generic [ref=e28]: 已就绪
+        - generic [ref=e29]:
+          - generic [ref=e30]:
+            - generic [ref=e31]: 原始轨迹点
+            - generic [ref=e32]: ODS
+          - generic [ref=e33]: 已就绪
+        - generic [ref=e34]:
+          - generic [ref=e35]:
+            - generic [ref=e36]: 行程明细
+            - generic [ref=e37]: DW
+          - generic [ref=e38]: 已就绪
+        - generic [ref=e39]:
+          - generic [ref=e40]:
+            - generic [ref=e41]: 轨迹分段明细
+            - generic [ref=e42]: DW
+          - generic [ref=e43]: 已就绪
+    - navigation "仪表盘模块导航" [ref=e44]:
+      - generic [ref=e45]:
+        - paragraph [ref=e46]: 门户
+        - button "资产门户 四层资产与状态总览" [ref=e47] [cursor=pointer]:
+          - generic [ref=e48]: AS
+          - generic [ref=e49]:
+            - generic [ref=e50]: 资产门户
+            - generic [ref=e51]: 四层资产与状态总览
+      - generic [ref=e52]:
+        - paragraph [ref=e53]: 分析
+        - button "总览 核心指标、趋势与箱线图" [ref=e54] [cursor=pointer]:
+          - generic [ref=e55]: OV
+          - generic [ref=e56]:
+            - generic [ref=e57]: 总览
+            - generic [ref=e58]: 核心指标、趋势与箱线图
+        - button "热力回放 道路流量时间桶" [ref=e59] [cursor=pointer]:
+          - generic [ref=e60]: HM
+          - generic [ref=e61]:
+            - generic [ref=e62]: 热力回放
+            - generic [ref=e63]: 道路流量时间桶
+      - generic [ref=e64]:
+        - paragraph [ref=e65]: 路径
+        - button "路径对比 最短路与最快路" [ref=e66] [cursor=pointer]:
+          - generic [ref=e67]: RT
+          - generic [ref=e68]:
+            - generic [ref=e69]: 路径对比
+            - generic [ref=e70]: 最短路与最快路
+        - button "推荐中心 路径、时段与避堵建议" [ref=e71] [cursor=pointer]:
+          - generic [ref=e72]: RC
+          - generic [ref=e73]:
+            - generic [ref=e74]: 推荐中心
+            - generic [ref=e75]: 路径、时段与避堵建议
+      - generic [ref=e76]:
+        - paragraph [ref=e77]: 圈人
+        - button "圈人中心 车辆标签与道路热点" [ref=e78] [cursor=pointer]:
+          - generic [ref=e79]: CD
+          - generic [ref=e80]:
+            - generic [ref=e81]: 圈人中心
+            - generic [ref=e82]: 车辆标签与道路热点
+      - generic [ref=e83]:
+        - paragraph [ref=e84]: 展示
+        - button "答辩大屏 自动轮播与全屏展示" [ref=e85] [cursor=pointer]:
+          - generic [ref=e86]: BS
+          - generic [ref=e87]:
+            - generic [ref=e88]: 答辩大屏
+            - generic [ref=e89]: 自动轮播与全屏展示
+    - generic [ref=e90]:
+      - generic [ref=e91]: 主题
+      - group "主题切换" [ref=e92]:
+        - button "浅色" [pressed] [ref=e93] [cursor=pointer]
+        - button "深色" [ref=e94] [cursor=pointer]
+  - generic [ref=e95]:
+    - generic [ref=e96]:
+      - heading "总览" [level=2] [ref=e97]
+      - paragraph [ref=e98]: 基于 H5 + JLD2 合并入仓，依托 PostGIS 统计能力，支持最短路与最快路的路径对比。
+      - generic [ref=e99]:
+        - generic [ref=e100]: 热力图日期数：5
+        - generic [ref=e101]: 最近刷新：2026-04-20 03:40
+    - status [ref=e102]: 正在加载后端数据...
+    - generic [ref=e103]:
+      - generic [ref=e104]:
+        - article [ref=e105]:
+          - heading "总行程数" [level=3] [ref=e106]
+          - paragraph [ref=e107]: "0"
+        - article [ref=e108]:
+          - heading "单日峰值车辆数" [level=3] [ref=e109]
+          - paragraph [ref=e110]: "0"
+        - article [ref=e111]:
+          - heading "总里程（km）" [level=3] [ref=e112]
+          - paragraph [ref=e113]: "0.00"
+      - generic [ref=e114]:
+        - article [ref=e115]:
+          - heading "每日行程数" [level=4] [ref=e116]
+          - application [ref=e119]
+        - article [ref=e125]:
+          - heading "每日车辆数" [level=4] [ref=e126]
+          - application [ref=e129]
+        - article [ref=e135]:
+          - heading "每日里程" [level=4] [ref=e136]
+          - application [ref=e139]
+      - generic [ref=e145]:
+        - article [ref=e146]:
+          - heading "里程箱线图" [level=4] [ref=e147]
+          - generic [ref=e148]: 暂无箱线图数据
+        - article [ref=e149]:
+          - heading "速度箱线图" [level=4] [ref=e150]
+          - generic [ref=e151]: 暂无箱线图数据

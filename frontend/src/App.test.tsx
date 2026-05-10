@@ -159,6 +159,21 @@ function mockResponse(url: string) {
       ],
     };
   }
+  if (url.includes("/crowd/segments/seed_r1/geometry")) {
+    return {
+      road_id: "seed_r1",
+      road_name: "Seed Road 1",
+      geometry: JSON.stringify({
+        type: "LineString",
+        coordinates: [
+          [126.642, 45.756],
+          [126.62, 45.74],
+        ],
+      }),
+      source: "test",
+      source_segment_count: 1,
+    };
+  }
   if (url.includes("/crowd/segments")) {
     return {
       items: [
@@ -171,13 +186,7 @@ function mockResponse(url: string) {
           vehicle_count: 3,
           distance_m: 9000,
           avg_speed_kmh: 33,
-          geometry: JSON.stringify({
-            type: "LineString",
-            coordinates: [
-              [126.642, 45.756],
-              [126.62, 45.74],
-            ],
-          }),
+          geometry: null,
         },
       ],
     };
@@ -358,12 +367,21 @@ describe("App", () => {
   it("renders dashboard and KPI cards", async () => {
     render(<App />);
     expect(screen.getByText("工作台")).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByText("总行程数")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { name: "数据状态" })).toBeInTheDocument()
+    );
     expect(screen.getByText("资产门户")).toBeInTheDocument();
     expect(screen.getByText("推荐中心")).toBeInTheDocument();
     expect(screen.getByText("热力回放")).toBeInTheDocument();
     expect(screen.getByText("圈人中心")).toBeInTheDocument();
-    expect(screen.getByText("答辩大屏")).toBeInTheDocument();
+    expect(screen.queryByText("答辩大屏")).not.toBeInTheDocument();
+    const overviewEntry = await screen.findByRole("button", {
+      name: /^总览 核心指标、趋势与箱线图$/i,
+    });
+    await act(async () => {
+      overviewEntry.click();
+    });
+    await waitFor(() => expect(screen.getByText("总行程数")).toBeInTheDocument());
     expect(screen.getByText("里程箱线图")).toBeInTheDocument();
     expect(screen.getByText("速度箱线图")).toBeInTheDocument();
   });
@@ -386,6 +404,12 @@ describe("App", () => {
 
   it("shows boxplot hover hint text", async () => {
     render(<App />);
+    const overviewEntry = await screen.findByRole("button", {
+      name: /^总览 核心指标、趋势与箱线图$/i,
+    });
+    await act(async () => {
+      overviewEntry.click();
+    });
     await waitFor(() =>
       expect(screen.getByText("悬停箱体可查看精确数值")).toBeInTheDocument()
     );

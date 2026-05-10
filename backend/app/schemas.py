@@ -198,6 +198,14 @@ class CrowdSegmentItem(BaseModel):
     updated_at: str | None = None
 
 
+class CrowdSegmentGeometryResponse(BaseModel):
+    road_id: str
+    road_name: str | None = None
+    geometry: str | None = None
+    source: str | None = None
+    source_segment_count: int | None = None
+
+
 class CrowdProfileSummaryResponse(BaseModel):
     total_vehicle_count: int
     tagged_vehicle_count: int

@@ -9,6 +9,7 @@ from app.schemas import (
     BoxplotResponse,
     BucketsResponse,
     CongestionAvoidanceResponse,
+    CrowdSegmentGeometryResponse,
     CrowdProfileSummaryResponse,
     CrowdSegmentsResponse,
     CrowdVehiclesResponse,
@@ -29,6 +30,7 @@ from app.schemas import (
     SummaryResponse,
 )
 from app.services.crowd_service import (
+    fetch_crowd_segment_geometry,
     fetch_crowd_profile_summary,
     fetch_crowd_segments,
     fetch_crowd_vehicles,
@@ -201,11 +203,33 @@ def crowd_vehicles(
 def crowd_segments(
     tag_code: str | None = Query(default=None),
     limit: int = Query(default=10, ge=1, le=100),
+    include_geometry: bool = Query(default=False),
     db: Session = Depends(get_db),
 ) -> CrowdSegmentsResponse:
     return CrowdSegmentsResponse.model_validate(
-        {"items": fetch_crowd_segments(db, tag_code=tag_code, limit=limit)}
+        {
+            "items": fetch_crowd_segments(
+                db,
+                tag_code=tag_code,
+                limit=limit,
+                include_geometry=include_geometry,
+            )
+        }
     )
+
+
+@router.get(
+    "/crowd/segments/{road_id}/geometry",
+    response_model=CrowdSegmentGeometryResponse,
+)
+def crowd_segment_geometry(
+    road_id: str,
+    db: Session = Depends(get_db),
+) -> CrowdSegmentGeometryResponse:
+    item = fetch_crowd_segment_geometry(db, road_id=road_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="road geometry not found")
+    return CrowdSegmentGeometryResponse.model_validate(item)
 
 
 @router.post("/recommend/route", response_model=RouteRecommendationResponse)

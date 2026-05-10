@@ -181,6 +181,14 @@ export type CrowdSegment = {
   updated_at?: string | null;
 };
 
+export type CrowdSegmentGeometry = {
+  road_id: string;
+  road_name?: string | null;
+  geometry?: string | null;
+  source?: string | null;
+  source_segment_count?: number | null;
+};
+
 export type RouteRecommendation = {
   start_time: string;
   query_time: string;
@@ -337,20 +345,43 @@ export async function fetchCrowdProfileSummary(): Promise<CrowdProfileSummary> {
   return request<CrowdProfileSummary>("/crowd/profile-summary");
 }
 
-export async function fetchCrowdVehicles(tagCode?: string): Promise<CrowdVehicle[]> {
+export async function fetchCrowdVehicles(
+  tagCode?: string,
+  signal?: AbortSignal
+): Promise<CrowdVehicle[]> {
   const q = new URLSearchParams();
   if (tagCode) q.set("tag_code", tagCode);
   q.set("limit", "12");
-  const data = await request<{ items: CrowdVehicle[] }>(`/crowd/vehicles?${q.toString()}`);
+  const data = await request<{ items: CrowdVehicle[] }>(
+    `/crowd/vehicles?${q.toString()}`,
+    { signal }
+  );
   return data.items ?? [];
 }
 
-export async function fetchCrowdSegments(tagCode?: string): Promise<CrowdSegment[]> {
+export async function fetchCrowdSegments(
+  tagCode?: string,
+  signal?: AbortSignal
+): Promise<CrowdSegment[]> {
   const q = new URLSearchParams();
   if (tagCode) q.set("tag_code", tagCode);
   q.set("limit", "8");
-  const data = await request<{ items: CrowdSegment[] }>(`/crowd/segments?${q.toString()}`);
+  q.set("include_geometry", "false");
+  const data = await request<{ items: CrowdSegment[] }>(
+    `/crowd/segments?${q.toString()}`,
+    { signal }
+  );
   return data.items ?? [];
+}
+
+export async function fetchCrowdSegmentGeometry(
+  roadId: string,
+  signal?: AbortSignal
+): Promise<CrowdSegmentGeometry> {
+  return request<CrowdSegmentGeometry>(
+    `/crowd/segments/${encodeURIComponent(roadId)}/geometry`,
+    { signal }
+  );
 }
 
 export async function fetchRouteRecommendation(

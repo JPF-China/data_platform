@@ -99,6 +99,16 @@ def ensure_tdm_ads_schema(cur: psycopg.Cursor) -> None:
           PRIMARY KEY (tag_code, road_id)
         );
 
+        CREATE TABLE IF NOT EXISTS ads_road_geometry (
+          road_id text PRIMARY KEY,
+          road_name text,
+          geometry geometry(MultiLineString, 4326),
+          geometry_geojson text,
+          simplified_geojson text,
+          source_segment_count bigint,
+          updated_at timestamptz NOT NULL DEFAULT now()
+        );
+
         CREATE TABLE IF NOT EXISTS ads_asset_portal_summary (
           asset_layer text PRIMARY KEY,
           asset_count integer NOT NULL DEFAULT 0,
@@ -164,6 +174,12 @@ def ensure_tdm_ads_schema(cur: psycopg.Cursor) -> None:
           distance_m,
           geom
         FROM heatmap_bins;
+
+        CREATE INDEX IF NOT EXISTS idx_ads_vehicle_segments_tag_rank
+        ON ads_vehicle_segments(tag_code, trip_count DESC, distance_m DESC, road_id);
+
+        CREATE INDEX IF NOT EXISTS idx_ads_road_geometry_geom
+        ON ads_road_geometry USING gist(geometry);
         """
     )
 

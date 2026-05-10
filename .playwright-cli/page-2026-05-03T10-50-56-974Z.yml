@@ -1,0 +1,117 @@
+- main [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: DP
+      - generic [ref=e7]: 哈尔滨车辆行程分析平台
+    - generic [ref=e9]:
+      - generic [ref=e10]: ⌕
+      - searchbox [ref=e11]
+    - generic [ref=e12]:
+      - generic [ref=e13]: 2026-04-20 03:40
+      - generic [ref=e14]: 路径可用
+  - complementary [ref=e15]:
+    - generic [ref=e16]:
+      - paragraph [ref=e17]: Workspace
+      - heading "工作台" [level=1] [ref=e18]
+    - navigation "仪表盘模块导航" [ref=e19]:
+      - generic [ref=e20]:
+        - paragraph [ref=e21]: 门户
+        - button "数据状态 刷新、任务与能力检查" [ref=e22] [cursor=pointer]:
+          - generic [ref=e23]: ST
+          - generic [ref=e24]:
+            - generic [ref=e25]: 数据状态
+            - generic [ref=e26]: 刷新、任务与能力检查
+        - button "资产门户 四层资产与状态总览" [ref=e27] [cursor=pointer]:
+          - generic [ref=e28]: AS
+          - generic [ref=e29]:
+            - generic [ref=e30]: 资产门户
+            - generic [ref=e31]: 四层资产与状态总览
+      - generic [ref=e32]:
+        - paragraph [ref=e33]: 分析
+        - button "总览 核心指标、趋势与箱线图" [ref=e34] [cursor=pointer]:
+          - generic [ref=e35]: OV
+          - generic [ref=e36]:
+            - generic [ref=e37]: 总览
+            - generic [ref=e38]: 核心指标、趋势与箱线图
+        - button "热力回放 道路流量时间桶" [active] [ref=e39] [cursor=pointer]:
+          - generic [ref=e40]: HM
+          - generic [ref=e41]:
+            - generic [ref=e42]: 热力回放
+            - generic [ref=e43]: 道路流量时间桶
+      - generic [ref=e44]:
+        - paragraph [ref=e45]: 路径
+        - button "路径对比 最短路与最快路" [ref=e46] [cursor=pointer]:
+          - generic [ref=e47]: RT
+          - generic [ref=e48]:
+            - generic [ref=e49]: 路径对比
+            - generic [ref=e50]: 最短路与最快路
+        - button "推荐中心 路径、时段与避堵建议" [ref=e51] [cursor=pointer]:
+          - generic [ref=e52]: RC
+          - generic [ref=e53]:
+            - generic [ref=e54]: 推荐中心
+            - generic [ref=e55]: 路径、时段与避堵建议
+      - generic [ref=e56]:
+        - paragraph [ref=e57]: 圈人
+        - button "圈人中心 车辆标签与道路热点" [ref=e58] [cursor=pointer]:
+          - generic [ref=e59]: CD
+          - generic [ref=e60]:
+            - generic [ref=e61]: 圈人中心
+            - generic [ref=e62]: 车辆标签与道路热点
+    - generic [ref=e63]:
+      - generic [ref=e64]: 主题
+      - group "主题切换" [ref=e65]:
+        - button "浅色" [pressed] [ref=e66] [cursor=pointer]
+        - button "深色" [ref=e67] [cursor=pointer]
+  - generic [ref=e68]:
+    - generic [ref=e69]:
+      - heading "热力回放" [level=2] [ref=e269]
+      - paragraph [ref=e71]: 基于 H5 + JLD2 合并入仓，依托 PostGIS 统计能力，支持最短路与最快路的路径对比。
+      - generic [ref=e72]:
+        - generic [ref=e73]: 热力图日期数：5
+        - generic [ref=e74]: 最近刷新：2026-04-20 03:40
+    - generic [ref=e271]:
+      - generic [ref=e272]:
+        - heading "热力图回放" [level=4] [ref=e273]
+        - generic [ref=e274]:
+          - generic [ref=e275]:
+            - text: 日期
+            - combobox "日期" [ref=e276]:
+              - option "2015-01-03" [selected]
+              - option "2015-01-04"
+              - option "2015-01-05"
+              - option "2015-01-06"
+              - option "2015-01-07"
+          - generic [ref=e277]:
+            - text: 时间轴
+            - slider "时间轴 00:00" [ref=e278]: "0"
+            - generic [ref=e279]: 00:00
+          - button "播放" [ref=e280] [cursor=pointer]
+          - button "缩放到框选范围" [ref=e281] [cursor=pointer]
+          - button "重置范围" [ref=e282] [cursor=pointer]
+        - generic [ref=e283]:
+          - generic "热力图流量图例" [ref=e284]:
+            - generic [ref=e285]: 畅通
+            - generic [ref=e286]: 繁忙
+            - generic [ref=e287]: 拥堵
+          - button "清空热力图" [ref=e288] [cursor=pointer]
+        - generic [ref=e289]:
+          - generic [ref=e290]: 当前时间桶
+          - strong [ref=e291]: 2015-01-03 00:00
+          - generic [ref=e292]: 道路 4156 条
+          - generic [ref=e293]: 总流量 10,860
+          - generic [ref=e294]: 峰值 33
+      - generic [ref=e296]:
+        - generic [ref=e298]: 道路流量热力图（MapLibre GL）
+        - application "道路流量热力图（MapLibre GL）地图展示区域" [ref=e300]:
+          - region "Map" [ref=e301]
+          - generic:
+            - generic [ref=e302]:
+              - button "Zoom in" [ref=e303] [cursor=pointer]
+              - button "Zoom out" [ref=e305] [cursor=pointer]
+              - button "Drag to rotate map, click to reset north" [ref=e307]
+            - group [ref=e309]:
+              - generic "Toggle attribution" [ref=e310] [cursor=pointer]
+              - generic [ref=e311]:
+                - text: © OpenStreetMap contributors |
+                - link "MapLibre" [ref=e312] [cursor=pointer]:
+                  - /url: https://maplibre.org/

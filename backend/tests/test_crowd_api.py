@@ -33,4 +33,27 @@ def test_crowd_segments_returns_hot_roads_for_tag(client) -> None:
     assert first["tag_code"] == "commuter"
     assert first["road_id"] in {"seed_r1", "seed_r2"}
     assert first["trip_count"] >= 1
-    assert first["geometry"] is not None
+    assert first["geometry"] is None
+
+
+def test_crowd_segments_can_include_geometry_for_backward_compatibility(client) -> None:
+    res = client.get(
+        "/api/v1/crowd/segments",
+        params={"tag_code": "commuter", "include_geometry": "true"},
+    )
+    assert res.status_code == 200
+
+    body = res.json()
+    assert isinstance(body["items"], list)
+    assert len(body["items"]) >= 1
+    assert body["items"][0]["geometry"] is not None
+
+
+def test_crowd_segment_geometry_returns_single_road_geometry(client) -> None:
+    res = client.get("/api/v1/crowd/segments/seed_r1/geometry")
+    assert res.status_code == 200
+
+    body = res.json()
+    assert body["road_id"] == "seed_r1"
+    assert body["geometry"] is not None
+    assert body["source_segment_count"] >= 1

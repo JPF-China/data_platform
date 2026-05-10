@@ -185,6 +185,16 @@ CREATE TABLE IF NOT EXISTS ads_vehicle_segments (
   PRIMARY KEY (tag_code, road_id)
 );
 
+CREATE TABLE IF NOT EXISTS ads_road_geometry (
+  road_id text PRIMARY KEY,
+  road_name text,
+  geometry geometry(MultiLineString, 4326),
+  geometry_geojson text,
+  simplified_geojson text,
+  source_segment_count bigint,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS ads_asset_portal_summary (
   asset_layer text PRIMARY KEY,
   asset_count integer NOT NULL DEFAULT 0,
@@ -264,6 +274,7 @@ SELECT
 FROM heatmap_bins;
 
 CREATE INDEX IF NOT EXISTS idx_heatmap_date_time ON heatmap_bins(metric_date, time_bucket_start);
+CREATE INDEX IF NOT EXISTS idx_heatmap_bins_road_id ON heatmap_bins(road_id);
 CREATE INDEX IF NOT EXISTS idx_heatmap_geom ON heatmap_bins USING gist(geom);
 CREATE INDEX IF NOT EXISTS idx_road_speed_bins_bucket ON road_speed_bins(bucket_start, road_id);
 CREATE INDEX IF NOT EXISTS idx_road_speed_bins_road ON road_speed_bins(road_id, bucket_start);
@@ -275,5 +286,7 @@ CREATE INDEX IF NOT EXISTS idx_tdm_road_profile_trip_count ON tdm_road_profile(t
 CREATE INDEX IF NOT EXISTS idx_tdm_area_activity_trip_count ON tdm_area_activity_profile(trip_count DESC, vehicle_count DESC);
 CREATE INDEX IF NOT EXISTS idx_tdm_time_bucket_metric_date ON tdm_time_bucket_feature(metric_date, bucket_start);
 CREATE INDEX IF NOT EXISTS idx_ads_vehicle_segments_tag_code ON ads_vehicle_segments(tag_code, trip_count DESC);
+CREATE INDEX IF NOT EXISTS idx_ads_vehicle_segments_tag_rank ON ads_vehicle_segments(tag_code, trip_count DESC, distance_m DESC, road_id);
+CREATE INDEX IF NOT EXISTS idx_ads_road_geometry_geom ON ads_road_geometry USING gist(geometry);
 CREATE INDEX IF NOT EXISTS idx_ads_route_strategy_date ON ads_route_strategy(strategy_date, recommendation_level, bucket_start);
 CREATE INDEX IF NOT EXISTS idx_ads_route_recommendation_type_date ON ads_route_recommendation(recommendation_type, travel_date, created_at DESC);
