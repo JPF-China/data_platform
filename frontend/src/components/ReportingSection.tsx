@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import type { DailyReportRow, WeeklyReportRow } from "../api";
 import { fetchDailyReport, fetchWeeklyReport } from "../api";
+import { MetricCard, SectionShell, SurfaceCard } from "./Ui";
 
 export function ReportingSection() {
   const [daily, setDaily] = useState<DailyReportRow[]>([]);
@@ -10,61 +11,60 @@ export function ReportingSection() {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    setLoading(true); setError(null);
+    setLoading(true);
+    setError(null);
     try {
       const [d, w] = await Promise.all([fetchDailyReport(14), fetchWeeklyReport(8)]);
-      setDaily(d); setWeekly(w);
-    } catch (e) { setError((e as Error).message); }
-    finally { setLoading(false); }
+      setDaily(d);
+      setWeekly(w);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
   }, []);
-  useEffect(() => { load(); }, [load]);
 
-  if (loading) return <div className="flex items-center justify-center py-20 text-text-secondary">加载中...</div>;
-  if (error) return <div className="bg-danger-light text-danger rounded-xl p-4 text-[13px]">{error}</div>;
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  if (loading) return <div className="loading">加载中...</div>;
+  if (error) return <div className="error">{error}</div>;
 
   const kpis = tab === "daily" && daily.length > 0
     ? [
-        ["总行程", daily.reduce((a, r) => a + r.total_trips, 0).toLocaleString(), "↑"],
-        ["出车数", daily.reduce((a, r) => a + r.total_vehicles, 0).toLocaleString(), "→"],
-        ["总里程", daily.reduce((a, r) => a + r.total_distance_km, 0).toLocaleString() + " km", "↑"],
-        ["总疲劳", daily.reduce((a, r) => a + r.fatigue_count + r.severe_fatigue_count, 0).toLocaleString(), "⚠"],
+        ["总行程", daily.reduce((a, r) => a + r.total_trips, 0).toLocaleString()],
+        ["出车数", daily.reduce((a, r) => a + r.total_vehicles, 0).toLocaleString()],
+        ["总里程", `${daily.reduce((a, r) => a + r.total_distance_km, 0).toLocaleString()} km`],
+        ["总疲劳", daily.reduce((a, r) => a + r.fatigue_count + r.severe_fatigue_count, 0).toLocaleString()],
       ]
     : tab === "weekly" && weekly.length > 0
     ? [
-        ["总行程", weekly.reduce((a, r) => a + r.total_trips, 0).toLocaleString(), "↑"],
-        ["总车辆", weekly.reduce((a, r) => a + r.total_vehicles, 0).toLocaleString(), "→"],
-        ["总里程", weekly.reduce((a, r) => a + r.total_distance_km, 0).toLocaleString() + " km", "↑"],
-        ["疲劳事件", weekly.reduce((a, r) => a + r.fatigue_events + r.severe_fatigue_events, 0).toLocaleString(), "⚠"],
+        ["总行程", weekly.reduce((a, r) => a + r.total_trips, 0).toLocaleString()],
+        ["总车辆", weekly.reduce((a, r) => a + r.total_vehicles, 0).toLocaleString()],
+        ["总里程", `${weekly.reduce((a, r) => a + r.total_distance_km, 0).toLocaleString()} km`],
+        ["疲劳事件", weekly.reduce((a, r) => a + r.fatigue_events + r.severe_fatigue_events, 0).toLocaleString()],
       ]
     : [];
 
   return (
-    <div className="panel-fade space-y-4">
-      {/* segment control + KPIs */}
-      <div className="flex items-center gap-4">
-        <div className="flex rounded-lg border border-border overflow-hidden text-[13px] font-medium">
-          <button onClick={() => setTab("daily")} className={`px-4 py-1.5 ${tab === "daily" ? "bg-primary text-white" : "hover:bg-surface-container"}`}>日报</button>
-          <button onClick={() => setTab("weekly")} className={`px-4 py-1.5 border-l border-border ${tab === "weekly" ? "bg-primary text-white" : "hover:bg-surface-container"}`}>周报</button>
+    <SectionShell
+      title="运营报表"
+      description="日报与周报视图"
+      actions={
+        <div className="theme-buttons">
+          <button type="button" className={`theme-btn ${tab === "daily" ? "active" : ""}`} onClick={() => setTab("daily")}>日报</button>
+          <button type="button" className={`theme-btn ${tab === "weekly" ? "active" : ""}`} onClick={() => setTab("weekly")}>周报</button>
         </div>
-      </div>
-
-      {/* KPIs */}
-      {kpis.length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {kpis.map(([label, value, trend]) => (
-            <div key={label as string} className="bg-white rounded-xl shadow-[0_1px_3px_rgba(0,0,0,0.08)] p-4">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[12px] text-text-secondary">{label as string}</span>
-                <span className={`text-[14px] ${trend === "⚠" ? "text-warning" : trend === "↑" ? "text-success" : "text-text-secondary"}`}>{trend as string}</span>
-              </div>
-              <div className="text-[24px] font-bold text-text font-display data-mono">{value as string}</div>
-            </div>
-          ))}
+      }
+    >
+      {kpis.length > 0 ? (
+        <div className="kpi-grid">
+          {kpis.map(([label, value]) => <MetricCard key={label} label={label} value={value} />)}
         </div>
-      )}
+      ) : null}
 
-      {/* table */}
-      <div className="bg-white rounded-xl shadow-[0_1px_3px_rgba(0,0,0,0.08)] overflow-hidden">
+      <SurfaceCard>
         <div className="overflow-y-auto hide-scrollbar" style={{ maxHeight: "calc(100vh - 320px)" }}>
           {tab === "daily" ? (
             <table className="w-full text-[13px]">
@@ -99,7 +99,7 @@ export function ReportingSection() {
                     </tr>
                   );
                 })}
-                {daily.length === 0 && <tr><td colSpan={9} className="text-center py-6 text-text-secondary text-[12px]">暂无数据</td></tr>}
+                {daily.length === 0 ? <tr><td colSpan={9} className="text-center py-6 text-text-secondary text-[12px]">暂无数据</td></tr> : null}
               </tbody>
             </table>
           ) : (
@@ -129,12 +129,12 @@ export function ReportingSection() {
                     <td className="px-3 py-2 text-right tabular-nums text-danger">{w.severe_fatigue_events}</td>
                   </tr>
                 ))}
-                {weekly.length === 0 && <tr><td colSpan={8} className="text-center py-6 text-text-secondary text-[12px]">暂无数据</td></tr>}
+                {weekly.length === 0 ? <tr><td colSpan={8} className="text-center py-6 text-text-secondary text-[12px]">暂无数据</td></tr> : null}
               </tbody>
             </table>
           )}
         </div>
-      </div>
-    </div>
+      </SurfaceCard>
+    </SectionShell>
   );
 }

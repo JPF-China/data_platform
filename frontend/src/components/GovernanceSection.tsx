@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import type { AssetRecord, QualityRecord } from "../api";
 import { fetchAssets, fetchQualityChecks } from "../api";
+import { MetricCard, SectionShell, SurfaceCard } from "./Ui";
 
 export function GovernanceSection() {
   const [assets, setAssets] = useState<AssetRecord[]>([]);
@@ -9,17 +10,25 @@ export function GovernanceSection() {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    setLoading(true); setError(null);
+    setLoading(true);
+    setError(null);
     try {
       const [a, q] = await Promise.all([fetchAssets(), fetchQualityChecks()]);
-      setAssets(a); setQuality(q);
-    } catch (e) { setError((e as Error).message); }
-    finally { setLoading(false); }
+      setAssets(a);
+      setQuality(q);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
   }, []);
-  useEffect(() => { load(); }, [load]);
 
-  if (loading) return <div className="flex items-center justify-center py-20 text-text-secondary">加载中...</div>;
-  if (error) return <div className="bg-danger-light text-danger rounded-xl p-4 text-[13px]">{error}</div>;
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  if (loading) return <div className="loading">加载中...</div>;
+  if (error) return <div className="error">{error}</div>;
 
   const layers = ["DWD", "DWS", "ADS"] as const;
   const layerStats = layers.map((layer) => {
@@ -32,42 +41,15 @@ export function GovernanceSection() {
   });
 
   return (
-    <div className="panel-fade space-y-4">
-      <div>
-        <h3 className="text-[18px] font-semibold text-text font-display">数据治理概览</h3>
-        <p className="text-[13px] text-text-secondary mt-0.5">数仓分层监控与资产质量</p>
+    <SectionShell title="数据治理" description="数仓分层监控与资产质量">
+      <div className="kpi-grid">
+        {layerStats.map((ls) => (
+          <MetricCard key={ls.layer} label={ls.layer} value={`${ls.ready}/${ls.total}`} hint={`${ls.rows.toLocaleString()} 行 · ${ls.pct}% 就绪`} />
+        ))}
       </div>
 
-      {/* layer cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {layerStats.map((ls) => {
-          const barColor = ls.pct >= 100 ? "#34a853" : ls.pct >= 80 ? "#f9ab00" : "#ea4335";
-          return (
-            <div key={ls.layer} className="bg-white rounded-xl shadow-[0_1px_3px_rgba(0,0,0,0.08)] p-5 relative overflow-hidden">
-              <div className="absolute -top-4 -right-4 w-[80px] h-[80px] rounded-bl-full bg-primary/5" />
-              <div className="text-[24px] font-bold text-text font-display mb-1">{ls.layer}</div>
-              <div className="text-[12px] text-text-secondary mb-3">
-                {ls.total} 张表 · {ls.rows.toLocaleString()} 行
-              </div>
-              <div className="progress-bar mb-1">
-                <div className="progress-bar-fill" style={{ width: `${ls.pct}%`, background: barColor }} />
-              </div>
-              <div className="text-[11px] text-text-secondary flex justify-between">
-                <span>就绪 {ls.ready}/{ls.total}</span>
-                <span style={{ color: barColor }}>{ls.pct}%</span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* asset table + quality panel */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* asset catalog table */}
-        <div className="lg:col-span-2 bg-white rounded-xl shadow-[0_1px_3px_rgba(0,0,0,0.08)] overflow-hidden">
-          <div className="px-4 py-2 border-b border-border">
-            <h4 className="text-[13px] font-semibold text-text">核心资产目录</h4>
-          </div>
+        <SurfaceCard title="核心资产目录" className="lg:col-span-2">
           <div className="overflow-y-auto hide-scrollbar" style={{ maxHeight: "calc(100vh - 320px)" }}>
             <table className="w-full text-[13px]">
               <thead className="sticky top-0 bg-surface-low">
@@ -85,13 +67,10 @@ export function GovernanceSection() {
                     <td className="px-4 py-2 data-mono text-[12px]">{a.asset_key}</td>
                     <td className="px-3 py-2">{a.display_name}</td>
                     <td className="px-3 py-2 text-center">
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                        a.asset_layer === "ADS" ? "bg-primary/10 text-primary" : a.asset_layer === "DWS" ? "bg-[#7c3aed]/10 text-[#7c3aed]" : "bg-success-light text-success"
-                      }`}>{a.asset_layer}</span>
+                      <span className="badge badge--neutral">{a.asset_layer}</span>
                     </td>
                     <td className="px-3 py-2 text-center">
-                      <span className={`inline-flex items-center gap-1 text-[11px] ${a.status === "ready" ? "text-success" : a.status === "unknown" ? "text-text-secondary" : "text-danger"}`}>
-                        <span className={`pulse-dot ${a.status === "ready" ? "green" : a.status === "unknown" ? "yellow animate" : "red"}`} />
+                      <span className="badge badge--primary">
                         {a.status === "ready" ? "就绪" : a.status === "unknown" ? "未知" : a.status}
                       </span>
                     </td>
@@ -101,11 +80,9 @@ export function GovernanceSection() {
               </tbody>
             </table>
           </div>
-        </div>
+        </SurfaceCard>
 
-        {/* quality panel */}
-        <div className="bg-white rounded-xl shadow-[0_1px_3px_rgba(0,0,0,0.08)] p-4">
-          <h4 className="text-[13px] font-semibold text-text mb-3">质量检查报告</h4>
+        <SurfaceCard title="质量检查报告">
           <div className="space-y-2">
             {quality.map((q) => {
               const isPass = q.status === "pass";
@@ -113,7 +90,7 @@ export function GovernanceSection() {
                 <div key={q.check_key} className={`rounded-lg p-3 border-l-[3px] ${isPass ? "border-l-success bg-success-light/30" : "border-l-danger bg-danger-light/30"}`}>
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-[12px] font-medium data-mono">{q.check_key}</span>
-                    <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${isPass ? "bg-success text-white" : "bg-danger text-white"}`}>{isPass ? "PASS" : "FAIL"}</span>
+                    <span className={`badge ${isPass ? "badge--success" : "badge--danger"}`}>{isPass ? "PASS" : "FAIL"}</span>
                   </div>
                   <div className="text-[11px] text-text-secondary">
                     {Object.entries(q.details).map(([k, v]) => (
@@ -124,8 +101,8 @@ export function GovernanceSection() {
               );
             })}
           </div>
-        </div>
+        </SurfaceCard>
       </div>
-    </div>
+    </SectionShell>
   );
 }

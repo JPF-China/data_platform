@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import type { VehicleProfile, VehicleTag, ActivityRankingItem } from "../api";
 import { fetchVehicleProfiles, fetchActivityRanking } from "../api";
+import { MetricCard, SectionShell, SurfaceCard } from "./Ui";
 
 export function OpsProfileSection() {
   const [profiles, setProfiles] = useState<VehicleProfile[]>([]);
@@ -31,28 +32,32 @@ export function OpsProfileSection() {
   const commuterCount = useMemo(() => new Set(allTags.filter((t) => t.tag_code === "commuter").map((t) => t.vehicle_id)).size, [allTags]);
   const nightCount = useMemo(() => new Set(allTags.filter((t) => t.tag_code === "night_active").map((t) => t.vehicle_id)).size, [allTags]);
 
-  if (loading) return <div className="flex items-center justify-center py-20 text-text-secondary">加载中...</div>;
-  if (error) return <div className="bg-danger-light text-danger rounded-xl p-4 text-[13px]">{error}</div>;
+  if (loading) return <div className="loading">加载中...</div>;
+  if (error) return <div className="error">{error}</div>;
 
   return (
-    <div className="panel-fade space-y-4">
-      {/* filters */}
-      <div className="flex items-center gap-3 bg-white rounded-xl shadow-[0_1px_3px_rgba(0,0,0,0.08)] px-4 py-2">
-        <label className="flex items-center gap-1 text-[13px] text-text-secondary">
+    <SectionShell
+      title="运营画像"
+      description="车辆画像、标签过滤、活跃排行与通勤/夜间统计"
+      actions={
+        <label>
           标签
-          <select value={tagFilter} onChange={(e) => setTagFilter(e.target.value)} className="rounded-lg border border-border px-2 py-1 text-[13px] bg-surface-low">
+          <select value={tagFilter} onChange={(e) => setTagFilter(e.target.value)}>
             <option value="">全部</option>
             <option value="commuter">通勤</option>
             <option value="night_active">夜间活跃</option>
           </select>
         </label>
-        <span className="text-[12px] text-text-secondary">{tagFilter ? `${profiles.length} 辆` : `共 ${totalVehicles.toLocaleString()} 辆车`}</span>
+      }
+    >
+      <div className="kpi-grid">
+        <MetricCard label="通勤车辆" value={commuterCount.toLocaleString()} />
+        <MetricCard label="夜间活跃车辆" value={nightCount.toLocaleString()} />
+        <MetricCard label="车辆总数" value={totalVehicles.toLocaleString()} />
       </div>
 
-      {/* main grid: table left / ranking right */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* vehicle table */}
-        <div className="lg:col-span-2 bg-white rounded-xl shadow-[0_1px_3px_rgba(0,0,0,0.08)] overflow-hidden">
+        <SurfaceCard className="lg:col-span-2">
           <div className="overflow-y-auto hide-scrollbar" style={{ maxHeight: "calc(100vh - 280px)" }}>
             <table className="w-full text-[13px]">
               <thead className="sticky top-0 bg-surface-low">
@@ -84,12 +89,10 @@ export function OpsProfileSection() {
               </tbody>
             </table>
           </div>
-        </div>
+        </SurfaceCard>
 
-        {/* ranking panel */}
-        <div className="bg-white rounded-xl shadow-[0_1px_3px_rgba(0,0,0,0.08)] p-4">
+        <SurfaceCard title="活跃排行">
           <div className="flex items-center justify-between mb-3">
-            <h4 className="text-[13px] font-semibold text-text">活跃排行</h4>
             <div className="flex rounded-lg border border-border overflow-hidden text-[11px]">
               <button onClick={() => setRankCat("trip_count")} className={`px-3 py-1 ${rankCat === "trip_count" ? "bg-primary text-white" : "hover:bg-surface-container"}`}>行程数</button>
               <button onClick={() => setRankCat("distance")} className={`px-3 py-1 border-l border-border ${rankCat === "distance" ? "bg-primary text-white" : "hover:bg-surface-container"}`}>里程</button>
@@ -104,20 +107,8 @@ export function OpsProfileSection() {
               </div>
             ))}
           </div>
-        </div>
+        </SurfaceCard>
       </div>
-
-      {/* tag summary cards */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="bg-white rounded-xl shadow-[0_1px_3px_rgba(0,0,0,0.08)] p-5 flex items-center gap-4">
-          <div className="w-[48px] h-[48px] rounded-full bg-primary-light flex items-center justify-center text-[24px]">🏢</div>
-          <div><div className="text-[12px] text-text-secondary">通勤车辆</div><div className="text-[24px] font-bold text-text font-display data-mono">{commuterCount.toLocaleString()}</div></div>
-        </div>
-        <div className="bg-white rounded-xl shadow-[0_1px_3px_rgba(0,0,0,0.08)] p-5 flex items-center gap-4">
-          <div className="w-[48px] h-[48px] rounded-full bg-[#8e24aa]/10 flex items-center justify-center text-[24px]">🌙</div>
-          <div><div className="text-[12px] text-text-secondary">夜间活跃车辆</div><div className="text-[24px] font-bold text-text font-display data-mono">{nightCount.toLocaleString()}</div></div>
-        </div>
-      </div>
-    </div>
+    </SectionShell>
   );
 }
