@@ -127,60 +127,60 @@ function BoxplotMini({ data, unit }: { data: BoxRow[]; unit: string }) {
           const cx = i * band + band / 2;
           const boxW = Math.min(34, band * 0.45);
           return (
-            <g key={`${d.trip_date}-${i}`}>
-              <line
-                x1={cx}
-                x2={cx}
-                y1={y(d.min_value)}
-                y2={y(d.max_value)}
-                stroke="var(--plot-line)"
-                strokeWidth={1.4}
-              />
-              <line
-                x1={cx - boxW / 2}
-                x2={cx + boxW / 2}
-                y1={y(d.max_value)}
-                y2={y(d.max_value)}
-                stroke="var(--plot-line)"
-                strokeWidth={1.2}
-              />
-              <line
-                x1={cx - boxW / 2}
-                x2={cx + boxW / 2}
-                y1={y(d.min_value)}
-                y2={y(d.min_value)}
-                stroke="var(--plot-line)"
-                strokeWidth={1.2}
-              />
-              <rect
-                x={cx - boxW / 2}
-                y={y(d.q3)}
-                width={boxW}
-                height={Math.max(2, y(d.q1) - y(d.q3))}
-                fill="var(--plot-box-bg)"
-                stroke="var(--plot-box-line)"
-                strokeWidth={1.2}
-                onMouseEnter={() =>
-                  setHoverText(
-                    `${d.trip_date} | min=${d.min_value.toFixed(2)} ${unit}, q1=${d.q1.toFixed(2)} ${unit}, median=${d.median.toFixed(2)} ${unit}, q3=${d.q3.toFixed(2)} ${unit}, max=${d.max_value.toFixed(2)} ${unit}, n=${d.sample_count}`
-                  )
-                }
-                onMouseLeave={() => setHoverText("")}
-              />
-              <line
-                x1={cx - boxW / 2}
-                x2={cx + boxW / 2}
-                y1={y(d.median)}
-                y2={y(d.median)}
-                stroke="var(--plot-median)"
-                strokeWidth={1.8}
-              />
-              <title>{`${d.trip_date} min:${d.min_value.toFixed(2)} ${unit}, q1:${d.q1.toFixed(2)} ${unit}, median:${d.median.toFixed(2)} ${unit}, q3:${d.q3.toFixed(2)} ${unit}, max:${d.max_value.toFixed(2)} ${unit}, n:${d.sample_count}`}</title>
-              <text x={cx} y={202} textAnchor="middle" className="boxplot-label">
-                {(d.trip_date ?? "").slice(5)}
-              </text>
-            </g>
-          );
+             <g key={`${d.trip_date}-${i}`}>
+               <title>{`${d.trip_date} min:${d.min_value.toFixed(2)} ${unit}, q1:${d.q1.toFixed(2)} ${unit}, median:${d.median.toFixed(2)} ${unit}, q3:${d.q3.toFixed(2)} ${unit}, max:${d.max_value.toFixed(2)} ${unit}, n:${d.sample_count}`}</title>
+               <line
+                 x1={cx}
+                 x2={cx}
+                 y1={y(d.min_value)}
+                 y2={y(d.max_value)}
+                 stroke="var(--plot-line)"
+                 strokeWidth={1.4}
+               />
+               <line
+                 x1={cx - boxW / 2}
+                 x2={cx + boxW / 2}
+                 y1={y(d.max_value)}
+                 y2={y(d.max_value)}
+                 stroke="var(--plot-line)"
+                 strokeWidth={1.2}
+               />
+               <line
+                 x1={cx - boxW / 2}
+                 x2={cx + boxW / 2}
+                 y1={y(d.min_value)}
+                 y2={y(d.min_value)}
+                 stroke="var(--plot-line)"
+                 strokeWidth={1.2}
+               />
+               <rect
+                 x={cx - boxW / 2}
+                 y={y(d.q3)}
+                 width={boxW}
+                 height={Math.max(2, y(d.q1) - y(d.q3))}
+                 fill="var(--plot-box-bg)"
+                 stroke="var(--plot-box-line)"
+                 strokeWidth={1.2}
+                 onMouseEnter={() =>
+                   setHoverText(
+                     `${d.trip_date} | min=${d.min_value.toFixed(2)} ${unit}, q1=${d.q1.toFixed(2)} ${unit}, median=${d.median.toFixed(2)} ${unit}, q3=${d.q3.toFixed(2)} ${unit}, max=${d.max_value.toFixed(2)} ${unit}, n=${d.sample_count}`
+                   )
+                 }
+                 onMouseLeave={() => setHoverText("")}
+               />
+               <line
+                 x1={cx - boxW / 2}
+                 x2={cx + boxW / 2}
+                 y1={y(d.median)}
+                 y2={y(d.median)}
+                 stroke="var(--plot-median)"
+                 strokeWidth={1.8}
+               />
+               <text x={cx} y={202} textAnchor="middle" className="boxplot-label">
+                 {(d.trip_date ?? "").slice(5)}
+               </text>
+             </g>
+           );
         })}
       </svg>
       <div className="boxplot-hover">
@@ -589,6 +589,7 @@ function App() {
       if (routeMapContainerRef.current) {
         await ensureMapReady(routeMapContainerRef.current, routeMapRef);
       }
+      setMapInitTick((prev) => prev + 1);
     };
     void setup();
   }, [activeSection, ensureMapReady]);
