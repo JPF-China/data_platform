@@ -1,4 +1,9 @@
-.PHONY: help refresh-all refresh-stats refresh-ops refresh-risk refresh-report refresh-governance test deploy-fresh deploy-auto
+.PHONY: help rebuild refresh-all refresh-stats refresh-ops refresh-risk refresh-report refresh-governance test deploy-fresh deploy-auto
+
+# ...
+
+rebuild: ## Full rebuild (truncate + re-ingest + recompute all)
+	./scripts/deploy.sh --module rebuild
 
 DB_HOST ?= postgres
 DB_USER ?= postgres
@@ -59,3 +64,6 @@ deploy-auto: ## Auto-detect state and deploy
 
 deploy-module: ## Force refresh a specific module (usage: make deploy-module MODULE=stats)
 	./scripts/deploy.sh --module $(MODULE)
+
+rebuild: ## Full rebuild (truncate + re-ingest + recompute all)
+	./scripts/deploy.sh --module rebuild

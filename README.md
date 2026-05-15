@@ -136,8 +136,10 @@ SKIP_REGISTRY_CHECK=1 ./scripts/start.sh
 
 ## 统一部署（推荐）
 
+`deploy.sh` 封装了从数据检查到服务启动的全链路：
+
 ```bash
-# 从0开始的完整部署（首次使用）
+# 从0开始的完整部署（首次使用）→ 5 步流程
 ./scripts/deploy.sh --fresh
 
 # 自动判断当前状态继续（日常使用）
@@ -149,16 +151,43 @@ SKIP_REGISTRY_CHECK=1 ./scripts/start.sh
 ./scripts/deploy.sh --module risk        # 风险
 ./scripts/deploy.sh --module report      # 报表
 ./scripts/deploy.sh --module governance  # 治理
-./scripts/deploy.sh --module all         # 全部
-./scripts/deploy.sh --module rebuild     # 完整重建
+./scripts/deploy.sh --module all         # 全部模块（按依赖）
+./scripts/deploy.sh --module rebuild     # 完整重建（清库重来）
 ```
 
-或者通过 Makefile：
+Makefile 快捷方式：
 
 ```bash
+make rebuild                   # 完整重建
 make deploy-fresh              # 从0开始
 make deploy-auto               # 自动判断
 make deploy-module MODULE=risk # 指定模块
+```
+
+`--fresh` 的流程：
+1. **环境检查**：Docker + H5/JLD2 数据文件
+2. **启动 PostgreSQL** + 后端容器
+3. **全量入仓 + 计算**（pipeline 自行保证 SQL 函数最新）：ingest → stats → ops → risk → report → governance
+4. **启动 Frontend**
+5. **显示访问入口**
+
+## 日常启动（数据已存在）
+
+数据库已有数据时，只需拉起服务：
+
+```bash
+# 一键启动全部服务（postgres + backend + frontend）
+./scripts/start.sh
+
+# 跳过 Docker Hub 可达性检查（离线环境）
+SKIP_REGISTRY_CHECK=1 ./scripts/start.sh
+```
+
+`start.sh` 默认 `auto` 模式，自动检测当前运行状态缺啥补啥。显式指定：
+
+```bash
+START_MODE=full ./scripts/start.sh       # 强制完整栈
+START_MODE=frontend ./scripts/start.sh    # 仅前端
 ```
 
 ## 手动启动（可选）
@@ -185,10 +214,7 @@ docker compose down
 ## Docker 日常操作建议
 
 ```bash
-# 首次初始化/需要后端接口时
-START_MODE=full ./scripts/start.sh
-
-# 日常只看前端页面（复用已有数据）
+# 启动全部服务（数据已就绪时）
 ./scripts/start.sh
 
 # 查看服务状态与日志
@@ -204,51 +230,37 @@ docker compose restart backend
 ./scripts/stop.sh
 
 # 清空数据库并重建（慎用）
-docker compose down -v
-START_MODE=full ./scripts/start.sh
+make rebuild
 ```
 
-## 入仓执行（可选）
+## 入仓与数据质量
+
+入仓由 `deploy.sh` 统一管理，不推荐手动执行 Docker 命令。如需单独控制：
 
 ```bash
-cd backend
-uv run python -m app.etl.load_data --base-dir /Users/apple/data_platform --mode rebuild
+# 仅入仓（解析 H5+JLD2，不重算聚合）
+./scripts/deploy.sh --module ingest
+
+# 已有明细数据时只刷新聚合
+./scripts/deploy.sh --module all
 ```
 
-常用模式说明：
+### 数据质量保障
 
-- `rebuild`：全量重建（清空后重入仓 → 路网导入 → stats → ops → risk → report → governance）
-- `refresh`：复用已入仓明细，刷新路网映射 + 全部模块聚合（日常推荐）
-- `compute`：不入仓，只刷新全部模块聚合（stats → ops → risk → report → governance）
-- `ingest`：仅入仓，不刷新统计层
-- `optimize`：索引维护 + ANALYZE
-- `smoke`：验证统计表有数据
-- `refresh-stats` / `refresh-ops` / `refresh-risk` / `refresh-report` / `refresh-governance`：独立模块刷新
-- `refresh-all`：按依赖顺序执行全部模块刷新
+系统内置速度数据纠偏机制：
 
-Docker 内执行（推荐，路径固定）：
+- **入仓层**：`trip_segments.avg_speed_kmh` 计算时自动裁剪至 (0, 200] km/h，超出范围的设为 NULL
+- **聚合层**：所有统计函数自然继承入仓层过滤效果，仅对 `IS NOT NULL` 值计算
+
+常见问题排查：
 
 ```bash
-# 首次全量（入仓 + 路网 + 全部模块聚合）
-docker compose exec -T backend uv run python -m app.etl.load_data --base-dir / --mode rebuild
-
-# 全量入仓中断后 / 已有明细数据时，走快速刷新
-docker compose exec -T backend uv run python -m app.etl.load_data --base-dir / --mode refresh
+# 查看 ingest_runs 状态
+docker compose exec -T postgres psql -U postgres -d harbin_traffic \
+  -c "SELECT id,status,run_type,started_at,finished_at FROM ingest_runs ORDER BY id DESC LIMIT 10;"
 ```
 
-若遇到历史卡死的 `running` 任务（常见于中断重跑）：
-
-```bash
-docker compose exec -T postgres psql -U postgres -d harbin_traffic -c "SELECT id,status,run_type,started_at,finished_at FROM ingest_runs ORDER BY id DESC LIMIT 10;"
-```
-
-新版本会在启动新任务时自动把历史 `pipeline_*` 的 `running` 记录标记为失败（stale），避免误判状态。
-
-`table_row_stats` 说明：
-
-- 刷新时会先 `ANALYZE` 关键表。
-- 对关键展示表（`daily_*`、`heatmap_bins`、`road_speed_bins`、`ingest_road_map`）使用真实 `COUNT(*)` 写入。
-- 避免新构建后短时间出现 `0` 的误判。
+`table_row_stats` 对关键展示表（`daily_*`、`heatmap_bins`、`road_speed_bins`、`ingest_road_map`）使用真实 `COUNT(*)`，避免新构建后行数误判为 0。
 
 ## 测试命令
 

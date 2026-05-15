@@ -5,10 +5,10 @@ set -euo pipefail
 # 哈尔滨车辆轨迹分析系统 统一部署脚本
 #
 # 用法:
-#   ./scripts/deploy.sh --fresh           从0开始完整部署
-#   ./scripts/deploy.sh --auto            自动判断当前状态继续
+#   ./scripts/deploy.sh --fresh           从 0 开始完整部署
+#   ./scripts/deploy.sh --auto            自动判断状态继续
 #   ./scripts/deploy.sh --module <name>   强制刷新指定模块
-#     <name>: stats | ops | risk | report | governance | all | ingest | rebuild
+#     <name>: stats | ops | risk | report | governance | all | rebuild | ingest
 # ──────────────────────────────────────────────────────────
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -24,10 +24,11 @@ DB_NAME="harbin_traffic"
 DB_USER="postgres"
 TIMEOUT=300
 
-_ok()  { printf "\033[32m[OK]\033[0m %s\n" "$1"; }
+_ok()   { printf "\033[32m[OK]\033[0m %s\n" "$1"; }
 _step() { printf "\033[34m[..]\033[0m %s\n" "$1"; }
-_warn(){ printf "\033[33m[!!]\033[0m %s\n" "$1"; }
-_die() { printf "\033[31m[XX]\033[0m %s\n" "$1"; exit 1; }
+_warn() { printf "\033[33m[!!]\033[0m %s\n" "$1"; }
+_die()  { printf "\033[31m[XX]\033[0m %s\n" "$1"; exit 1; }
+_info() { printf "     %s\n" "$1"; }
 
 # ── detect docker compose ──
 _detect_compose() {
@@ -43,12 +44,12 @@ _detect_compose() {
 # ── check docker daemon ──
 _check_docker() {
     if ! docker info &>/dev/null; then
-        _die "Docker daemon 未运行"
+        _die "Docker daemon 未运行，请先启动 Docker Desktop"
     fi
     _ok "Docker 已就绪"
 }
 
-# ── service status helpers ──
+# ── service helpers ──
 _svc_running() {
     local svc="$1"
     $DOCKER_COMPOSE_CMD $COMPOSE_ARGS ps "$svc" 2>/dev/null | grep -q 'Up' && return 0 || return 1
@@ -59,7 +60,6 @@ _psql() {
         psql -U "$DB_USER" -d "$DB_NAME" "$@" 2>/dev/null
 }
 
-# ── DB health ──
 _db_has_data() {
     local cnt
     cnt=$(_psql -tAc "SELECT COUNT(*) FROM trips LIMIT 1" 2>/dev/null || echo "0")
@@ -67,51 +67,60 @@ _db_has_data() {
     [ "${cnt:-0}" -gt 0 ] && return 0 || return 1
 }
 
-_db_has_stats() {
-    local cnt
-    cnt=$(_psql -tAc "SELECT COUNT(*) FROM daily_metrics LIMIT 1" 2>/dev/null || echo "0")
-    cnt=$(echo "$cnt" | tr -d '[:space:]')
-    [ "${cnt:-0}" -gt 0 ] && return 0 || return 1
+# ── start / stop services ──
+_start_postgres() {
+    if _svc_running "$POSTGRES_SVC"; then
+        _ok "PostgreSQL 已在运行"
+        return
+    fi
+    _step "启动 PostgreSQL …"
+    $DOCKER_COMPOSE_CMD $COMPOSE_ARGS up -d --wait "$POSTGRES_SVC" 2>&1 | grep -v "^$" || true
+    _ok "PostgreSQL 已就绪"
 }
 
-# ── start services ──
-_start_services() {
-    _step "启动全部服务 (postgres + backend + frontend) …"
-    $DOCKER_COMPOSE_CMD $COMPOSE_ARGS up -d --wait "$POSTGRES_SVC" "$BACKEND_SVC" "$FRONTEND_SVC" 2>&1 || true
-
-    local waited=0
-    while ! _svc_running "$BACKEND_SVC"; do
-        sleep 2
-        waited=$((waited + 2))
-        if [ "$waited" -gt "$TIMEOUT" ]; then
-            _die "服务启动超时 (${TIMEOUT}s)"
-        fi
-    done
-    _ok "服务已启动"
+_start_backend() {
+    if _svc_running "$BACKEND_SVC"; then
+        _ok "Backend 已在运行"
+        return
+    fi
+    _step "启动 Backend …"
+    $DOCKER_COMPOSE_CMD $COMPOSE_ARGS up -d --wait "$BACKEND_SVC" 2>&1 | grep -v "^$" || true
+    _ok "Backend 已就绪"
 }
 
-# ── apply schema ──
-_apply_schema() {
-    _step "应用数据库 schema …"
-    $DOCKER_COMPOSE_CMD $COMPOSE_ARGS exec -T "$POSTGRES_SVC" \
-        psql -U "$DB_USER" -d "$DB_NAME" -f /docker-entrypoint-initdb.d/01-init.sql 2>&1 | tail -1
-    $DOCKER_COMPOSE_CMD $COMPOSE_ARGS exec -T "$POSTGRES_SVC" \
-        psql -U "$DB_USER" -d "$DB_NAME" -f /docker-entrypoint-initdb.d/02-ingest.sql 2>&1 | tail -1
-    $DOCKER_COMPOSE_CMD $COMPOSE_ARGS exec -T "$POSTGRES_SVC" \
-        psql -U "$DB_USER" -d "$DB_NAME" -f /docker-entrypoint-initdb.d/03-stats.sql 2>&1 | tail -1
-    _ok "Schema 已应用"
+_start_frontend() {
+    if _svc_running "$FRONTEND_SVC"; then
+        _ok "Frontend 已在运行"
+        return
+    fi
+    _step "启动 Frontend …"
+    $DOCKER_COMPOSE_CMD $COMPOSE_ARGS up -d --wait "$FRONTEND_SVC" 2>&1 | grep -v "^$" || true
+    _ok "Frontend 已就绪"
+}
+
+_check_data_files() {
+    local h5_count jld_count
+    h5_count=$(find "$PROJECT_DIR/data" -name "*.h5" 2>/dev/null | wc -l | tr -d '[:space:]')
+    jld_count=$(find "$PROJECT_DIR/jldpath" -name "*.jld2" 2>/dev/null | wc -l | tr -d '[:space:]')
+    _info "H5 文件: ${h5_count:-0} 个"
+    _info "JLD2 文件: ${jld_count:-0} 个"
+    if [ "${h5_count:-0}" -lt 1 ] || [ "${jld_count:-0}" -lt 1 ]; then
+        _die "原始数据不完整，请先执行: ./scripts/prepare_data.sh"
+    fi
+    _ok "原始数据就绪"
 }
 
 # ── run pipeline ──
 _run_pipeline() {
     local mode="$1"
-    _step "执行管线: mode=$mode"
+    local extra_args="${EXTRA_PIPELINE_ARGS:-}"
+
+    _step "执行管线: mode=$mode extra=$extra_args"
     $DOCKER_COMPOSE_CMD $COMPOSE_ARGS exec -T "$BACKEND_SVC" \
-        bash -lc "PYTHONPATH=/app uv run python -m app.etl.load_data --base-dir / --mode $mode" 2>&1
+        bash -lc "PYTHONUNBUFFERED=1 PYTHONPATH=/app uv run python -m app.etl.load_data --base-dir / --mode $mode $extra_args" 2>&1
     _ok "管线完成: $mode"
 }
 
-# ── refresh module (via load_data.py with pipeline tracking) ──
 _refresh_module() {
     local module="$1"
     case "$module" in
@@ -127,100 +136,7 @@ _refresh_module() {
     esac
 }
 
-# ─── mode: fresh ────────────────────────────────────────
-_fresh() {
-    echo ""
-    echo "  ╔══════════════════════════════════════════╗"
-    echo "  ║       从 0 开始完整部署 (fresh)         ║"
-    echo "  ╚══════════════════════════════════════════╝"
-    echo ""
-
-    _check_docker
-    _start_services
-    _apply_schema
-
-    _step "检查原始数据 …"
-    local h5_count
-    h5_count=$(find "$PROJECT_DIR/data" -name "*.h5" 2>/dev/null | wc -l | tr -d '[:space:]')
-    local jld_count
-    jld_count=$(find "$PROJECT_DIR/jldpath" -name "*.jld2" 2>/dev/null | wc -l | tr -d '[:space:]')
-    if [ "${h5_count:-0}" -lt 1 ] || [ "${jld_count:-0}" -lt 1 ]; then
-        _warn "原始数据不完整 (h5=$h5_count, jld2=$jld_count)，请先执行: ./scripts/prepare_data.sh"
-        _die "缺少原始数据文件"
-    fi
-    _ok "原始数据就绪 (h5=$h5_count, jld2=$jld_count)"
-
-    _run_pipeline "rebuild"
-    _ok "完整部署完成"
-    _show_summary
-}
-
-# ─── mode: auto ─────────────────────────────────────────
-_auto() {
-    echo ""
-    echo "  ╔══════════════════════════════════════════╗"
-    echo "  ║     自动判断当前状态继续 (auto)         ║"
-    echo "  ╚══════════════════════════════════════════╝"
-    echo ""
-
-    _check_docker
-
-    if ! _svc_running "$POSTGRES_SVC"; then
-        _warn "PostgreSQL 未运行，启动全部服务 …"
-        _start_services
-        _apply_schema
-    elif ! _svc_running "$BACKEND_SVC"; then
-        _warn "Backend 未运行，启动 …"
-        _start_services
-    else
-        _ok "服务已在线"
-    fi
-
-    if _db_has_data; then
-        _ok "检测到已有入仓明细数据"
-        if _db_has_stats; then
-            _ok "统计表已有数据，执行全模块刷新 (refresh)"
-            _run_pipeline "refresh"
-        else
-            _warn "统计表为空，执行全模块计算 (compute)"
-            _run_pipeline "compute"
-        fi
-    else
-        _warn "无明细数据，执行完整重建 (rebuild)"
-        local h5_count
-        h5_count=$(find "$PROJECT_DIR/data" -name "*.h5" 2>/dev/null | wc -l | tr -d '[:space:]')
-        if [ "${h5_count:-0}" -lt 1 ]; then
-            _die "缺少原始数据，请先执行数据准备"
-        fi
-        _run_pipeline "rebuild"
-    fi
-
-    _ok "自动部署完成"
-    _show_summary
-}
-
-# ─── mode: module ───────────────────────────────────────
-_module_mode() {
-    local name="$1"
-    echo ""
-    echo "  ╔══════════════════════════════════════════╗"
-    echo "  ║      强制刷新指定模块: $name              ║"
-    echo "  ╚══════════════════════════════════════════╝"
-    echo ""
-
-    _check_docker
-
-    if ! _svc_running "$BACKEND_SVC"; then
-        _start_services
-    else
-        _ok "服务已在线"
-    fi
-
-    _refresh_module "$name"
-    _ok "模块刷新完成: $name"
-}
-
-# ─── summary ────────────────────────────────────────────
+# ── show summary ──
 _show_summary() {
     echo ""
     echo "  ┌───────────────────────────────────────────┐"
@@ -231,27 +147,165 @@ _show_summary() {
     echo ""
 }
 
-# ─── usage ──────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════
+# mode: fresh — 从 0 开始完整部署
+# ══════════════════════════════════════════════════════════
+_fresh() {
+    echo ""
+    echo "  ╔══════════════════════════════════════════╗"
+    echo "  ║       从 0 开始完整部署 (fresh)         ║"
+    echo "  ╚══════════════════════════════════════════╝"
+    echo ""
+
+    echo "  [1/5] 环境检查"
+    echo "  ──────────────"
+    _check_docker
+    _check_data_files
+
+    echo ""
+    echo "  [2/5] 启动 PostgreSQL"
+    echo "  ─────────────────────"
+    _start_postgres
+
+    # 检查存量数据并提示清空
+    if _db_has_data; then
+        local cnt
+        cnt=$(_psql -tAc "SELECT COUNT(*) FROM trips")
+        cnt=$(echo "$cnt" | tr -d '[:space:]')
+        echo ""
+        _warn "数据库已有 ${cnt} 条行程数据，即将清空并重建"
+    fi
+
+    echo ""
+    echo "  [3/5] 全量入仓 + 计算"
+    echo "  ─────────────────────"
+    echo "  (此步骤耗时较长，5 个 H5 文件共约 5GB)"
+    _start_backend
+    _run_pipeline "rebuild"
+
+    echo ""
+    echo "  [4/5] 启动服务"
+    echo "  ─────────────"
+    _start_frontend
+
+    echo ""
+    echo "  [5/5] 大功告成"
+    echo "  ─────────────"
+    _ok "完整部署完成"
+    _show_summary
+}
+
+# ══════════════════════════════════════════════════════════
+# mode: auto — 自动判断当前状态继续
+# ══════════════════════════════════════════════════════════
+_auto() {
+    echo ""
+    echo "  ╔══════════════════════════════════════════╗"
+    echo "  ║     自动判断当前状态继续 (auto)         ║"
+    echo "  ╚══════════════════════════════════════════╝"
+    echo ""
+
+    _check_docker
+
+    # 1. 确保 PostgreSQL 在线
+    _start_postgres
+
+    # 2. 根据数据状态决定动作
+    if _db_has_data; then
+        local cnt
+        cnt=$(_psql -tAc "SELECT COUNT(*) FROM trips")
+        cnt=$(echo "$cnt" | tr -d '[:space:]')
+        _ok "检测到 ${cnt} 条行程数据"
+
+        local stats_cnt
+        stats_cnt=$(_psql -tAc "SELECT COUNT(*) FROM daily_metrics" 2>/dev/null || echo "0")
+        stats_cnt=$(echo "$stats_cnt" | tr -d '[:space:]')
+        if [ "${stats_cnt:-0}" -gt 0 ]; then
+            _ok "统计表已有数据，增量刷新 …"
+            _start_backend
+            _run_pipeline "refresh"
+        else
+            _warn "统计表为空，全量计算 …"
+            _start_backend
+            _run_pipeline "compute"
+        fi
+    else
+        _warn "数据库为空，开始完整重建 …"
+        _check_data_files
+        _info "全量入仓中（约 5GB 数据，耗时较长）"
+        _start_backend
+        _run_pipeline "rebuild"
+    fi
+
+    _start_frontend
+    _ok "自动部署完成"
+    _show_summary
+}
+
+# ══════════════════════════════════════════════════════════
+# mode: module — 强制刷新指定模块
+# ══════════════════════════════════════════════════════════
+_module_mode() {
+    local name="$1"
+    echo ""
+    echo "  ╔══════════════════════════════════════════╗"
+    printf "  ║      强制刷新指定模块: %-18s ║\n" "$name"
+    echo "  ╚══════════════════════════════════════════╝"
+    echo ""
+
+    _check_docker
+    _start_postgres
+
+    if [ "$name" = "rebuild" ]; then
+        _check_data_files
+        local cnt
+        cnt=$(_psql -tAc "SELECT COUNT(*) FROM trips" 2>/dev/null || echo "0")
+        cnt=$(echo "$cnt" | tr -d '[:space:]')
+        if [ "${cnt:-0}" -gt 0 ]; then
+            _warn "库中已有 ${cnt} 条行程，重建将清空后重新入仓"
+            _info "(trips, trip_segments, trip_points_raw 等明细表将被 TRUNCATE)"
+        fi
+    fi
+
+    _start_backend
+    _refresh_module "$name"
+
+    if [ "$name" = "rebuild" ] || [ "$name" = "all" ]; then
+        _start_frontend
+    fi
+    _ok "模块刷新完成: $name"
+    _show_summary
+}
+
+# ── usage ──
 _usage() {
     cat <<'EOF'
 用法:
-  ./scripts/deploy.sh --fresh           从0开始完整部署
+  ./scripts/deploy.sh --fresh           从 0 开始完整部署
   ./scripts/deploy.sh --auto            自动判断当前状态继续
   ./scripts/deploy.sh --module <name>   强制刷新指定模块
 
 模块:
-  stats       - 统计聚合
-  ops         - 运营画像
-  risk        - 风险监测
-  report      - 运营报表
-  governance  - 数据治理
-  all         - 全部模块（按依赖顺序）
+  stats       - 统计聚合        ops         - 运营画像
+  risk        - 风险监测        report      - 运营报表
+  governance  - 数据治理        all         - 全部模块（按依赖）
   rebuild     - 完整重建（清库重来）
   ingest      - 仅数据入仓
+
+部署流程 (--fresh):
+  ① 环境检查（Docker + H5/JLD2 数据文件）
+  ② 启动 PostgreSQL + 确保 Schema 最新
+  ③ 全量入仓 + 计算（ingest → stats → ops → risk → report → governance）
+  ④ 启动 Backend + Frontend
+
+全新上手:
+  git clone <repo> && cd data_platform
+  ./scripts/prepare_data.sh        # 下载原始数据
+  ./scripts/deploy.sh --fresh      # 一键部署
 EOF
 }
 
-# ─── main ───────────────────────────────────────────────
+# ── main ──
 main() {
     _detect_compose
 

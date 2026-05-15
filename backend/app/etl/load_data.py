@@ -30,34 +30,54 @@ def _progress(step: str, message: str) -> None:
     print(f"[{ts}] [{step}] {message}", flush=True)
 
 
-def _recompute_segments_metrics(cur: psycopg.Cursor) -> None:
-    cur.execute(
-        """
-        WITH calc AS (
-          SELECT id, ST_Length(path_geom::geography) AS length_m
-          FROM trip_segments
+def _recompute_segments_metrics(cur: psycopg.Cursor, batch_size: int = 500_000) -> None:
+    cur.execute("SELECT MIN(id), MAX(id) FROM trip_segments")
+    row = cur.fetchone()
+    if row is None or row[0] is None:
+        return
+    min_id, max_id = int(row[0]), int(row[1])
+    total = max_id - min_id + 1
+
+    lo = min_id
+    while lo <= max_id:
+        hi = min(lo + batch_size - 1, max_id)
+        _progress("step1/5", f"  computing segments {lo}-{hi} ({int((lo - min_id) / total * 100)}%)")
+        cur.execute(
+            """
+            WITH calc AS (
+              SELECT id, ST_Length(path_geom::geography) AS length_m
+              FROM trip_segments
+              WHERE id >= %s AND id <= %s
+            )
+            UPDATE trip_segments s
+            SET
+              distance_m = c.length_m,
+              avg_speed_kmh = CASE
+                WHEN s.duration_s IS NOT NULL AND s.duration_s > 0
+                  AND (c.length_m / s.duration_s) * 3.6 > 0
+                  AND (c.length_m / s.duration_s) * 3.6 <= 200
+                THEN (c.length_m / s.duration_s) * 3.6
+                ELSE NULL
+              END
+            FROM calc c
+            WHERE s.id = c.id
+            """,
+            (lo, hi),
         )
-        UPDATE trip_segments s
-        SET
-          distance_m = c.length_m,
-          avg_speed_kmh = CASE
-            WHEN s.duration_s IS NOT NULL AND s.duration_s > 0 THEN (c.length_m / s.duration_s) * 3.6
-            ELSE NULL
-          END
-        FROM calc c
-        WHERE s.id = c.id
-        """
-    )
+        cur.connection.commit()
+        lo = hi + 1
+    _progress("step1/5", f"  segments computation done ({max_id - min_id + 1} rows)")
 
 
 def _set_rebuild_tables_unlogged(cur: psycopg.Cursor) -> None:
+    _progress("step1/5", "  setting rebuild tables UNLOGGED …")
     cur.execute(
         """
+        ALTER TABLE trips SET UNLOGGED;
         ALTER TABLE trip_points_raw SET UNLOGGED;
         ALTER TABLE trip_match_meta SET UNLOGGED;
         ALTER TABLE trip_points_matched SET UNLOGGED;
         ALTER TABLE trip_segments SET UNLOGGED;
-        ALTER TABLE trips SET UNLOGGED;
         ALTER TABLE daily_metrics SET UNLOGGED;
         ALTER TABLE daily_distance_boxplot SET UNLOGGED;
         ALTER TABLE daily_speed_boxplot SET UNLOGGED;
@@ -67,7 +87,26 @@ def _set_rebuild_tables_unlogged(cur: psycopg.Cursor) -> None:
     )
 
 
+def _set_rebuild_tables_logged(cur: psycopg.Cursor) -> None:
+    _progress("step1/5", "  setting rebuild tables LOGGED …")
+    cur.execute(
+        """
+        ALTER TABLE trips SET LOGGED;
+        ALTER TABLE trip_points_raw SET LOGGED;
+        ALTER TABLE trip_match_meta SET LOGGED;
+        ALTER TABLE trip_points_matched SET LOGGED;
+        ALTER TABLE trip_segments SET LOGGED;
+        ALTER TABLE daily_metrics SET LOGGED;
+        ALTER TABLE daily_distance_boxplot SET LOGGED;
+        ALTER TABLE daily_speed_boxplot SET LOGGED;
+        ALTER TABLE heatmap_bins SET LOGGED;
+        ALTER TABLE table_row_stats SET LOGGED;
+        """
+    )
+
+
 def _truncate_rebuild_tables(cur: psycopg.Cursor) -> None:
+    _progress("step1/5", "  truncating stats tables …")
     cur.execute(
         """
         TRUNCATE TABLE
@@ -80,7 +119,9 @@ def _truncate_rebuild_tables(cur: psycopg.Cursor) -> None:
         RESTART IDENTITY CASCADE
         """
     )
+    _progress("step1/5", "  truncating ingest detail tables …")
     ingest_service.truncate_ingest_detail_tables(cur)
+    _progress("step1/5", "  all tables cleared")
 
 
 def _step2_ingest_sources_parallel(
@@ -133,7 +174,15 @@ def _step4_compute(cur: psycopg.Cursor) -> None:
 
 
 def _step4_aggregate_all(conn: psycopg.Connection) -> None:
-    """Run stats first (backward-compat), then ops/risk/report/governance."""
+    """Ensure SQL functions are current, then run stats → ops/risk/report/governance."""
+    # 确保统计函数为最新版本（幂等：全部 CREATE OR REPLACE）
+    schema_path = Path("/infra/postgres/stats_schema.sql")
+    if schema_path.exists():
+        with conn.cursor() as cur:
+            cur.execute(schema_path.read_text())
+        conn.commit()
+        _progress("step4/5", "stats functions refreshed from stats_schema.sql")
+
     with conn.cursor() as cur:
         _step4_compute(cur)
         conn.commit()
@@ -292,11 +341,10 @@ def run_pipeline(
                         file_shards=file_shards,
                     )
                 elif mode == "rebuild":
-                    if pg_fast_mode:
-                        _progress("step1/5", "start: set rebuild tables UNLOGGED")
-                        _set_rebuild_tables_unlogged(cur)
-                        conn.commit()
-                        _progress("step1/5", "done: rebuild tables UNLOGGED")
+                    # 1) 清理可能残留的 advisory lock（上次 abort 遗留）
+                    _progress("step1/5", "clearing stale advisory lock if any …")
+                    cur.execute("SELECT pg_advisory_unlock(%s)", (INGEST_ADVISORY_LOCK_KEY,))
+                    conn.commit()
 
                     lock_acquired = ingest_service.try_acquire_rebuild_lock(
                         cur, INGEST_ADVISORY_LOCK_KEY
@@ -306,15 +354,28 @@ def run_pipeline(
                             "another rebuild ingest is running (advisory lock not acquired)"
                         )
 
-                    _progress(
-                        "step1/5",
-                        "start: clear tables and ingest source files in parallel",
-                    )
+                    # 2) 清空所有表（LOGGED 表 truncate 瞬间完成）
+                    _progress("step1/5", "start: truncating all tables")
                     _truncate_rebuild_tables(cur)
+                    conn.commit()
+                    _progress("step1/5", "done: all tables truncated")
+
+                    # 3) 切 UNLOGGED（空表 ALTER TABLE 瞬间完成）
+                    if pg_fast_mode:
+                        _progress("step1/5", "start: set rebuild tables UNLOGGED")
+                        _set_rebuild_tables_unlogged(cur)
+                        conn.commit()
+                        _progress("step1/5", "done: rebuild tables UNLOGGED")
+
+                    # 4) 并行入仓
                     _progress("step1/5", "start: drop hot write indexes")
                     ingest_service.drop_ingest_hot_indexes(cur)
                     conn.commit()
 
+                    _progress(
+                        "step1/5",
+                        "start: ingest source files in parallel",
+                    )
                     ingest_counts = _step2_ingest_sources_parallel(
                         base_dir=base_dir,
                         max_trips=max_trips,
@@ -326,27 +387,38 @@ def run_pipeline(
                     )
                     _progress("step1/5", f"done: loaded rows={ingest_counts}")
 
-                    _progress(
-                        "step1/5", "start: rebuild segment distance/speed metrics"
-                    )
+                    # 5) 重算 segment 指标
+                    _progress("step1/5", "start: rebuild segment distance/speed metrics")
                     _recompute_segments_metrics(cur)
                     conn.commit()
                     _progress("step1/5", "done: segment metrics rebuilt")
 
+                    # 6) 切回 LOGGED（保证数据安全）
+                    if pg_fast_mode:
+                        _progress("step1/5", "start: set rebuild tables LOGGED")
+                        _set_rebuild_tables_logged(cur)
+                        conn.commit()
+                        _progress("step1/5", "done: rebuild tables LOGGED")
+
+                    # 7) 重建索引
                     _progress("step1/5", "start: rebuild hot indexes")
                     ingest_service.create_ingest_hot_indexes(cur)
                     conn.commit()
                     _progress("step1/5", "done: hot indexes rebuilt")
 
+                    # 8) ANALYZE
+                    _progress("step1/5", "start: ANALYZE detail tables")
                     cur.execute(
                         "ANALYZE trips, trip_points_raw, trip_match_meta, trip_points_matched, trip_segments"
                     )
                     conn.commit()
                     _progress("step1/5", "done: analyze refreshed")
 
+                    # 9) 路网导入
                     _step_route_ingest(base_dir, cur)
                     conn.commit()
 
+                    # 10) 全部模块聚合
                     _progress("step4/5", "start: compute all aggregate tables (stats → ops → risk → report → governance)")
                     _step4_aggregate_all(conn)
                     _progress("step4/5", "done")

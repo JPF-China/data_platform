@@ -107,12 +107,10 @@ if [ "$START_MODE" = "auto" ]; then
 fi
 
 if [ "${SKIP_REGISTRY_CHECK:-0}" != "1" ]; then
-    registry_code="$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 --max-time 15 https://registry-1.docker.io/v2/ || true)"
+    registry_code="$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 3 --max-time 10 https://registry-1.docker.io/v2/ || true)"
     if [ "$registry_code" = "000" ]; then
-        echo "无法连接 Docker Hub（registry-1.docker.io），镜像拉取会失败。"
-        echo "请先检查网络/代理，或配置镜像加速器后重试。"
-        echo "如已预拉取镜像可跳过检查: SKIP_REGISTRY_CHECK=1 ./scripts/start.sh"
-        exit 1
+        echo "⚠️  无法连接 Docker Hub，若镜像未预拉取可能失败。"
+        echo "   离线环境可跳过此检查: SKIP_REGISTRY_CHECK=1 ./scripts/start.sh"
     fi
 fi
 
@@ -169,6 +167,11 @@ echo "   Frontend:  http://localhost:5173"
 echo "   Backend:   http://localhost:8000"
 echo "   Backend docs: http://localhost:8000/docs"
 echo "   Database:  localhost:5432 (postgres/postgres)"
+echo ""
+echo "📊 数据管线:"
+echo "   首次入仓:  ./scripts/deploy.sh --fresh"
+echo "   模块重建:  ./scripts/deploy.sh --module rebuild"
+echo "   增量刷新:  ./scripts/deploy.sh --module all"
 echo ""
 echo "💡 Tips:"
 echo "   - View logs: $COMPOSE_CMD logs -f"

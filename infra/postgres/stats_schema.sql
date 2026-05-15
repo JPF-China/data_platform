@@ -168,10 +168,10 @@ BEGIN
   )
   WITH trip_distance AS (
     SELECT
-      s.trip_id,
-      COALESCE(SUM(s.distance_m), 0) AS trip_distance_m,
-      AVG(s.avg_speed_kmh) FILTER (WHERE s.avg_speed_kmh IS NOT NULL) AS trip_avg_speed_kmh
-    FROM trip_segments s
+       s.trip_id,
+       COALESCE(SUM(s.distance_m), 0) AS trip_distance_m,
+       AVG(s.avg_speed_kmh) FILTER (WHERE s.avg_speed_kmh IS NOT NULL) AS trip_avg_speed_kmh
+     FROM trip_segments s
     GROUP BY s.trip_id
   ),
   trip_feature AS (
@@ -521,12 +521,12 @@ BEGIN
     ) AS peak_flag,
     now()
   FROM trips t
-  LEFT JOIN LATERAL (
-    SELECT SUM(s.distance_m) AS distance_m,
-           AVG(s.avg_speed_kmh) AS avg_speed_kmh
-    FROM trip_segments s
-    WHERE s.trip_id = t.id
-  ) sd ON true
+   LEFT JOIN LATERAL (
+     SELECT SUM(s.distance_m) AS distance_m,
+            AVG(s.avg_speed_kmh) AS avg_speed_kmh
+     FROM trip_segments s
+     WHERE s.trip_id = t.id
+   ) sd ON true
   WHERE t.is_valid = true
     AND t.start_time IS NOT NULL
     AND t.devid IS NOT NULL
@@ -791,11 +791,11 @@ BEGIN
   ),
   night_agg AS (
     SELECT
-      vehicle_id, event_date,
-      COALESCE(SUM(distance_m), 0) AS night_distance_m,
-      COALESCE(SUM(duration_min), 0)::integer AS night_duration_min,
-      AVG(avg_speed_kmh) FILTER (WHERE avg_speed_kmh IS NOT NULL) AS night_speed_kmh
-    FROM night_segments
+     vehicle_id, event_date,
+       COALESCE(SUM(distance_m), 0) AS night_distance_m,
+       COALESCE(SUM(duration_min), 0)::integer AS night_duration_min,
+       AVG(avg_speed_kmh) FILTER (WHERE avg_speed_kmh IS NOT NULL) AS night_speed_kmh
+     FROM night_segments
     GROUP BY vehicle_id, event_date
   )
   SELECT
@@ -1216,16 +1216,16 @@ BEGIN
     ORDER BY trip_date, road_id, cnt DESC, start_hour
   )
   SELECT
-    rt.trip_date,
-    rt.road_id,
-    MAX(rt.road_name) AS road_name,
-    COUNT(DISTINCT rt.trip_id) AS trip_count,
-    COUNT(DISTINCT rt.devid) AS vehicle_count,
-    COALESCE(SUM(rt.distance_m), 0) AS total_distance_m,
-    AVG(rt.avg_speed_kmh) FILTER (WHERE rt.avg_speed_kmh IS NOT NULL) AS avg_speed_kmh,
-    ph.peak_hour,
-    now()
-  FROM road_trips rt
+     rt.trip_date,
+     rt.road_id,
+     MAX(rt.road_name) AS road_name,
+     COUNT(DISTINCT rt.trip_id) AS trip_count,
+     COUNT(DISTINCT rt.devid) AS vehicle_count,
+     COALESCE(SUM(rt.distance_m), 0) AS total_distance_m,
+     AVG(rt.avg_speed_kmh) FILTER (WHERE rt.avg_speed_kmh IS NOT NULL) AS avg_speed_kmh,
+     ph.peak_hour,
+     now()
+   FROM road_trips rt
   LEFT JOIN peak_hours ph ON ph.trip_date = rt.trip_date AND ph.road_id = rt.road_id
   GROUP BY rt.trip_date, rt.road_id, ph.peak_hour;
 END;

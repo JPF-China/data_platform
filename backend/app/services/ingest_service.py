@@ -364,8 +364,12 @@ def _extract_jld_rows(
             continue
         from_seq = i
         to_seq = i + 1
-        start_ts = int(tms[min(from_seq, len(tms) - 1)]) if len(tms) else None
-        end_ts = int(tms[min(to_seq, len(tms) - 1)]) if len(tms) else None
+        start_ts = int(times[min(from_seq, len(times) - 1)]) if len(times) else None
+        end_ts = int(times[min(to_seq, len(times) - 1)]) if len(times) else None
+        if start_ts is not None:
+            start_ts += 28800
+        if end_ts is not None:
+            end_ts += 28800
         duration_s = float(max(0, (end_ts - start_ts))) if start_ts and end_ts else None
         start_lat = float(lats[min(from_seq, len(lats) - 1)]) if len(lats) else None
         start_lon = float(lons[min(from_seq, len(lons) - 1)]) if len(lons) else None

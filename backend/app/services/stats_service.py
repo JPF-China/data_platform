@@ -121,11 +121,11 @@ def aggregate_daily_speed_boxplot(cur: psycopg.Cursor) -> None:
           COUNT(*) AS sample_count
         FROM trip_segments s
         JOIN trips t ON t.id = s.trip_id
-        WHERE t.trip_date IS NOT NULL
-          AND t.is_valid = true
-          AND s.avg_speed_kmh IS NOT NULL
-        GROUP BY t.trip_date
-        ORDER BY t.trip_date
+         WHERE t.trip_date IS NOT NULL
+           AND t.is_valid = true
+           AND s.avg_speed_kmh IS NOT NULL
+         GROUP BY t.trip_date
+         ORDER BY t.trip_date
         """
     )
 
@@ -211,10 +211,10 @@ def aggregate_road_speed_bins(cur: psycopg.Cursor) -> None:
           JOIN trips t ON t.id = s.trip_id
           JOIN ingest_road_map map ON map.trip_road_id = s.road_id
           JOIN road_segments rs ON rs.id = map.road_segment_id
-          WHERE s.start_time IS NOT NULL
-            AND s.road_id IS NOT NULL
-            AND s.avg_speed_kmh IS NOT NULL
-            AND t.is_valid = true
+           WHERE s.start_time IS NOT NULL
+             AND s.road_id IS NOT NULL
+             AND s.avg_speed_kmh IS NOT NULL
+             AND t.is_valid = true
         )
         SELECT
           road_id,

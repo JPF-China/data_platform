@@ -391,6 +391,7 @@ ingest_runs -> meta_job_status
 - 前端不得直连数据库。
 - 每个模块可独立刷新，可被外部调度器（cron）按需触发。
 - 模块间通过 SQL 刷新函数或服务层调用连接，不通过文件耦合。
+- **速度数据质量**：入仓层 `_recompute_segments_metrics` 对 `avg_speed_kmh` 执行 (0, 200] km/h 裁剪，超限设为 NULL，聚合层自然继承。
 
 ## 10. 交付顺序
 
