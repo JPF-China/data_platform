@@ -32,16 +32,20 @@ uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 2. 并行分发源文件（`data/*.h5`，可选匹配 `jldpath/*.jld2`）
 3. 每个 worker 以分块 `COPY` 写入（默认每块 200_000 行）
 
-固定顺序：`ingest -> 路网入仓模块 -> stats -> route search`
+固定顺序：`ingest -> 路网入仓模块 -> stats -> ops -> risk -> report -> governance`。
 
 ## 6. 常用运行模式
 
-- `ingest`：仅入仓编排
-- `rebuild`：入仓 + 路网入仓模块 + 统计刷新 + 路径能力准备
-- `refresh`：复用已有明细数据，仅刷新路网映射 + 统计（推荐日常使用）
-- `optimize`：仅数据库优化
-- `compute`：仅刷新统计
-- `smoke`：只做轻量验证
+| 模式 | 说明 |
+|------|------|
+| `ingest` | 仅入仓编排，清理并重建明细层 |
+| `rebuild` | 入仓 → 路网 → stats → ops → risk → report → governance（全量重建） |
+| `refresh` | 复用已有明细，刷新路网映射 + 全部模块聚合（日常推荐） |
+| `compute` | 不入仓，仅刷新全部模块聚合（stats → ops → risk → report → governance） |
+| `optimize` | 仅索引维护 + ANALYZE |
+| `smoke` | 仅做轻量统计表验证 |
+| `refresh-stats` / `refresh-ops` / `refresh-risk` / `refresh-report` / `refresh-governance` | 独立模块刷新 |
+| `refresh-all` | 按依赖顺序执行全部模块刷新 |
 
 示例：
 
@@ -59,16 +63,41 @@ uv run python -m app.etl.load_data --base-dir /Users/apple/data_platform --mode 
 
 ## 7. 主要接口
 
+### 总览与图表
 - `GET /healthz`
 - `GET /api/v1/summary/daily`
-- `GET /api/v1/map/heatmap`
-- `GET /api/v1/map/heatmap/buckets`
 - `GET /api/v1/chart/daily-trip-count`
 - `GET /api/v1/chart/daily-vehicle-count`
 - `GET /api/v1/chart/daily-distance`
 - `GET /api/v1/chart/daily-distance-boxplot`
 - `GET /api/v1/chart/daily-speed-boxplot`
+
+### 热力图与地图
+- `GET /api/v1/map/heatmap`
+- `GET /api/v1/map/heatmap/buckets`
+- `GET /api/v1/map/vehicle-path`
+
+### 路径对比
 - `POST /api/v1/route/compare`
+- `GET /api/v1/route/capability`
+
+### 运营画像
+- `GET /api/v1/ops/vehicle-profiles`
+- `GET /api/v1/ops/frequent-routes`
+- `GET /api/v1/ops/activity-ranking`
+
+### 风险监测
+- `GET /api/v1/risk/fatigue`
+- `GET /api/v1/risk/abnormal`
+- `GET /api/v1/risk/summary`
+
+### 运营报表
+- `GET /api/v1/report/daily`
+- `GET /api/v1/report/weekly`
+
+### 数据治理
+- `GET /api/v1/governance/assets`
+- `GET /api/v1/governance/quality`
 
 ## 8. 测试
 

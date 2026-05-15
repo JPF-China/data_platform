@@ -24,6 +24,20 @@
   --color-tertiary: #c55500;
   --color-tertiary-light: #fff3e0;
 
+  /* chart & plot tokens */
+  --chart-cyan: #1a73e8;
+  --chart-amber: #c55500;
+  --chart-grid: #e0e2ec;
+  --chart-axis: #5f6368;
+  --plot-line: #005bbf;
+  --plot-box-bg: rgba(26,115,232,0.16);
+  --plot-box-line: #1a73e8;
+  --plot-median: #c55500;
+
+  /* component tokens */
+  --bg-panel-soft: #f2f3fd;
+  --line: #c1c6d6;
+
   --radius-sm: 0.25rem;
   --radius-md: 0.5rem;
   --radius-lg: 0.75rem;
@@ -42,7 +56,7 @@ html, body, #root {
   margin: 0;
   min-height: 100%;
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: 16px;
   color: var(--color-text);
   background: var(--color-surface-low);
   -webkit-font-smoothing: antialiased;
@@ -73,7 +87,7 @@ html, body, #root {
 /* map container */
 .map-container {
   width: 100%;
-  height: calc(100vh - 190px);
+  height: calc(100vh - 240px);
   min-height: 400px;
   background: #e8eaed;
   border-radius: var(--radius-lg);
@@ -146,3 +160,14 @@ html, body, #root {
 .dark .text-text-secondary { color: var(--color-text-secondary); }
 .dark .hover\:bg-surface-container:hover { background-color: var(--color-surface-container); }
 .dark .bg-primary-light { background-color: var(--color-primary-light); }
+
+.dark { 
+  --chart-grid: rgba(152,178,210,0.24);
+  --chart-axis: #98afd1;
+  --chart-cyan: #8ab4f8;
+  --chart-amber: #ffb74a;
+  --plot-line: #8ab4f8;
+  --plot-box-bg: rgba(138,180,248,0.18);
+  --plot-box-line: #a8c7fa;
+  --plot-median: #ffb74a;
+}

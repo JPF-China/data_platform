@@ -195,7 +195,7 @@ class ActivityRankingResponse(BaseModel):
 # ── risk monitoring ──
 
 class FatigueItem(BaseModel):
-    driver_id: str
+    vehicle_id: str
     window_start: str
     window_end: str
     run_minutes: int
@@ -205,7 +205,7 @@ class FatigueItem(BaseModel):
 
 
 class AbnormalRunningItem(BaseModel):
-    driver_id: str
+    vehicle_id: str
     event_date: str
     single_trip_duration_min: int
     single_trip_distance_m: float
@@ -213,7 +213,7 @@ class AbnormalRunningItem(BaseModel):
 
 
 class NightRiskItem(BaseModel):
-    driver_id: str
+    vehicle_id: str
     event_date: str
     night_distance_m: float
     night_duration_min: int

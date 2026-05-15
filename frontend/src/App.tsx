@@ -62,11 +62,11 @@ const defaultRoutePayload: RoutePayload = {
 const navItems: Array<{ id: AppSection; title: string; desc: string; icon: string; group: string }> = [
   { id: "overview", title: "总览", desc: "核心指标、趋势与箱线图", icon: "OV", group: "分析" },
   { id: "heatmap", title: "热力回放", desc: "道路流量时间桶", icon: "HM", group: "分析" },
-  { id: "route", title: "路径对比", desc: "最短路与最快路", icon: "RT", group: "路径" },
+  { id: "route", title: "路径对比", desc: "最短路与最快路", icon: "RT", group: "分析" },
   { id: "ops", title: "运营画像", desc: "车辆画像与活跃排行", icon: "OP", group: "运营" },
   { id: "risk", title: "风险监测", desc: "疲劳与异常运行", icon: "RK", group: "运营" },
-  { id: "report", title: "运营报表", desc: "日报与周报", icon: "RP", group: "报表" },
-  { id: "governance", title: "数据治理", desc: "资产与质量", icon: "GV", group: "治理" },
+  { id: "report", title: "运营报表", desc: "日报与周报", icon: "RP", group: "运营" },
+  { id: "governance", title: "数据治理", desc: "资产与质量", icon: "GV", group: "系统" },
 ];
 
 const mapTileTemplates = ((import.meta as unknown as { env?: Record<string, string | undefined> }).env?.VITE_MAP_TILES ?? "https://tile.openstreetmap.org/{z}/{x}/{y}.png")
@@ -365,6 +365,9 @@ function App() {
             </button>
           </div>
           <div className="theme-hint">切换后页面会立即同步到对应主题</div>
+          <a href="/bigscreen.html" target="_blank" rel="noopener noreferrer"
+             style={{ display: "block", textAlign: "center", marginTop: 8, padding: 8, borderRadius: 8, background: "#1a73e8", color: "#fff", fontSize: 13, fontWeight: 600, textDecoration: "none" }}
+          >📺 大屏监控</a>
         </div>
       </aside>
       <section className="content">
@@ -379,7 +382,7 @@ function App() {
           {activeSection === "heatmap" ? <HeatmapSection selectedDate={selectedDate} setSelectedDate={setSelectedDate} bucketIndex={bucketIndex} setBucketIndex={setBucketIndex} buckets={buckets} isPlaying={isPlaying} setIsPlaying={setIsPlaying} showHeatmapOnMap={showHeatmapOnMap} onClearHeatmap={clearHeatmapLayer} onRestoreHeatmap={restoreHeatmapLayer} vehicleId={vehicleId} setVehicleId={(value) => { setVehicleId(value); setHeatmapPathOnly(false); }} vehPathLoading={vehPathLoading} onLoadVehiclePath={async () => { if (!vehicleId.trim()) return; setHeatmapPathOnly(true); setActiveSection("heatmap"); setVehPathLoading(true); try { setVehPath(await fetchVehiclePath(vehicleId.trim(), selectedDate)); } catch (e) { setError(e instanceof Error ? e.message : "车辆路径加载失败"); } finally { setVehPathLoading(false); } }} vehPath={vehPath} onClearVehiclePath={() => { setVehPath(null); setHeatmapPathOnly(false); setShowHeatmapOnMap(true); }} onZoomToBbox={() => setBbox({ minLat: 45.7, minLon: 126.55, maxLat: 45.82, maxLon: 126.75 })} onResetBbox={() => setBbox(null)} pathMode={heatmapPathOnly} heatMapContainerRef={heatMapContainerRef} /> : null}
           {activeSection === "route" ? <RouteSection capability={capability} capabilityError={capabilityError} routePayload={routePayload} setRoutePayload={setRoutePayload} routeResult={routeResult} onRunRoute={onRunRoute} clearRouteOnMap={clearRouteOnMap} clearRouteResult={clearRouteResult} showShortestOnMap={showShortestOnMap} setShowShortestOnMap={setShowShortestOnMap} showFastestOnMap={showFastestOnMap} setShowFastestOnMap={setShowFastestOnMap} routeOverlap={routeOverlap} routeErrorHint={routeErrorHint} routePickMode={routePickMode} setRoutePickMode={setRoutePickMode} routeMapContainerRef={routeMapContainerRef} /> : null}
           {activeSection === "ops" ? <section className="panel-fade"><OpsProfileSection /></section> : null}
-          {activeSection === "risk" ? <section className="panel-fade"><RiskMonitoringSection onViewPath={async (driverId) => { setVehicleId(driverId); setHeatmapPathOnly(true); setActiveSection("heatmap"); }} /></section> : null}
+          {activeSection === "risk" ? <section className="panel-fade"><RiskMonitoringSection onViewPath={async (vehicleId) => { setVehicleId(vehicleId); setHeatmapPathOnly(true); setActiveSection("heatmap"); }} /></section> : null}
           {activeSection === "report" ? <section className="panel-fade"><ReportingSection /></section> : null}
           {activeSection === "governance" ? <section className="panel-fade"><GovernanceSection /></section> : null}
         </div>

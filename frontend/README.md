@@ -56,20 +56,30 @@ VITE_MAP_TILES=https://tile-a.example.com/{z}/{x}/{y}.png,https://tile-b.example
 
 工作台导航与主题：
 
-- 左侧导航按分组组织（分析 / 路径）。
+- 左侧导航按分组组织（分析 / 运营 / 系统）。
 - 总览内包含 KPI、趋势图与箱线图（不再单独提供箱线图导航）。
 - 主题开关固定在左侧底部独立区域，默认浅色，支持浅色/深色。
+- 左侧底部提供"大屏监控"入口，跳转到独立全屏仪表盘。
 
-路径地图交互要点：
+## 6. 大屏监控
 
-- 热力图子页面仅展示热力图与底图，不渲染路径线层和起终点标记。
-- 路径子页面仅展示路线相关图层（shortest/fastest + 起终点）。
-- 支持地图选点：选择起点 / 选择终点，点击地图自动回填经纬度。
-- `route/compare` 响应包含吸附后的点位信息：`snapped_start_point` / `snapped_end_point`（包含吸附节点、坐标与距离）。
-- 若出现“当前点位不支持/不可达”类错误，优先在 Route 地图重新选点。
-- 后端已实现输入点自动吸附到最近路网节点（见 `backend/app/services/route_service.py` 与 `backend/app/services/route_search_service.py`）。
+独立全屏仪表盘（`/bigscreen.html`），适用于投屏展示：
 
-## 6. 文档入口
+- 顶部实时时钟 + 系统在线状态
+- 4 张 KPI 卡片（总行程 / 总里程 / 活跃告警 / 严重疲劳）
+- 左侧 MapLibre GL 实时地图（哈尔滨城区）
+- 右侧风险实时监测 + 数据资产状态面板
+- 每 30 秒自动刷新数据
+- Vite 多页构建，独立入口
+
+## 7. 设计规范
+
+- 颜色令牌：统一使用 `index.css` 中 Tailwind `@theme` 定义（`--color-*` 变量），深色模式自动适配
+- 排版：Work Sans（标题） + Inter（正文） + JetBrains Mono（数据）
+- 间距体系：4px 基准网格
+- 卡片：12px 圆角，`#ffffff` 背景，`1px #e8eaed` 边框
+
+## 8. 文档入口
 
 - 主设计总纲：`../spec.md`
 - 实施版总纲：`../implementation_guide.md`

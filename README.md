@@ -1,19 +1,28 @@
 # 哈尔滨车辆行程分析平台（V1）
 
-本项目用于哈尔滨车辆轨迹数据分析，包含数据入仓、统计聚合、热力图回放与路径对比能力。
+本项目用于哈尔滨车辆轨迹数据分析，包含数据入仓、统计聚合、热力图回放、路径对比、运营画像、风险监测、运营报表、数据治理与大屏监控。
 
 ## 截图
 
-![P1](frontend/src/assets/P1.png)
-![P2](frontend/src/assets/P2.png)
-![P3](frontend/src/assets/P3.png)
+![数据总览](frontend/src/assets/P1.png)
+![大屏监控](frontend/src/assets/P2.png)
+![路径对比](frontend/src/assets/P3.png)
+
+## 前端界面
+
+- 主工作台：`http://localhost:5173` — 左侧 3 组导航（分析 / 运营 / 系统），7 个功能页面，深色/浅色主题切换
+- 大屏监控：`http://localhost:5173/bigscreen.html` — 独立全屏仪表盘，实时 KPI + MapLibre 地图 + 风险/资产面板 + 30s 自动刷新
 
 ## 功能概览
 
 - H5 + JLD2 数据入仓 PostgreSQL/PostGIS
-- 每日统计指标、里程/速度箱线图
-- 道路热力图分时回放
-- 最短路径与最快路径对比
+- 每日统计指标、里程/速度箱线图、小时聚合、道路日统计
+- 道路热力图分时回放 + 车辆轨迹回放
+- 最短路径与最快路径对比（pgRouting）
+- 运营画像：车辆画像、标签、活跃排行、常跑路段
+- 风险监测：疲劳驾驶 24h 评估、异常长时间运行、夜间高风险
+- 运营报表：日报、周报
+- 数据治理：资产目录、质量检查、任务状态追踪
 
 ## 技术栈
 
@@ -56,7 +65,7 @@ cd data_platform
 执行数据准备脚本（会下载、解压并把 `*.h5` 放到 `data/`、`*.jld2` 放到 `jldpath/`）：
 
 ```bash
-make data-prepare
+./scripts/prepare_data.sh
 ```
 
 可通过环境变量覆盖下载地址：
@@ -64,7 +73,7 @@ make data-prepare
 ```bash
 DATA_ARCHIVE_URL_MAIN="<你的主数据zip链接>" \
 DATA_ARCHIVE_URL_EXTRA="<你的补充数据7z链接>" \
-make data-prepare
+./scripts/prepare_data.sh
 ```
 
 说明：
@@ -125,6 +134,33 @@ SKIP_REGISTRY_CHECK=1 ./scripts/start.sh
 ./scripts/stop.sh
 ```
 
+## 统一部署（推荐）
+
+```bash
+# 从0开始的完整部署（首次使用）
+./scripts/deploy.sh --fresh
+
+# 自动判断当前状态继续（日常使用）
+./scripts/deploy.sh --auto
+
+# 强制刷新指定模块
+./scripts/deploy.sh --module stats       # 统计
+./scripts/deploy.sh --module ops         # 画像
+./scripts/deploy.sh --module risk        # 风险
+./scripts/deploy.sh --module report      # 报表
+./scripts/deploy.sh --module governance  # 治理
+./scripts/deploy.sh --module all         # 全部
+./scripts/deploy.sh --module rebuild     # 完整重建
+```
+
+或者通过 Makefile：
+
+```bash
+make deploy-fresh              # 从0开始
+make deploy-auto               # 自动判断
+make deploy-module MODULE=risk # 指定模块
+```
+
 ## 手动启动（可选）
 
 ```bash
@@ -181,17 +217,22 @@ uv run python -m app.etl.load_data --base-dir /Users/apple/data_platform --mode 
 
 常用模式说明：
 
-- `rebuild`：全量重建（清空后重入仓 + 路网入仓模块 + 统计聚合），首次初始化使用。
-- `refresh`：复用已入仓的 `trips/trip_segments`，只刷新路网映射与统计聚合，日常推荐。
-- `compute`：只刷新统计聚合。
+- `rebuild`：全量重建（清空后重入仓 → 路网导入 → stats → ops → risk → report → governance）
+- `refresh`：复用已入仓明细，刷新路网映射 + 全部模块聚合（日常推荐）
+- `compute`：不入仓，只刷新全部模块聚合（stats → ops → risk → report → governance）
+- `ingest`：仅入仓，不刷新统计层
+- `optimize`：索引维护 + ANALYZE
+- `smoke`：验证统计表有数据
+- `refresh-stats` / `refresh-ops` / `refresh-risk` / `refresh-report` / `refresh-governance`：独立模块刷新
+- `refresh-all`：按依赖顺序执行全部模块刷新
 
 Docker 内执行（推荐，路径固定）：
 
 ```bash
-# 首次全量
+# 首次全量（入仓 + 路网 + 全部模块聚合）
 docker compose exec -T backend uv run python -m app.etl.load_data --base-dir / --mode rebuild
 
-# 全量入仓中断后/已有明细数据时，走快速刷新
+# 全量入仓中断后 / 已有明细数据时，走快速刷新
 docker compose exec -T backend uv run python -m app.etl.load_data --base-dir / --mode refresh
 ```
 
@@ -212,10 +253,20 @@ docker compose exec -T postgres psql -U postgres -d harbin_traffic -c "SELECT id
 ## 测试命令
 
 ```bash
-make test
-make test-backend
-make test-frontend
-make smoke
+make test           # 全部后端测试
+make test-stats     # 统计模块测试
+make test-ops       # 运营画像测试
+make test-risk      # 风险监测测试
+make test-report    # 报表测试
+make test-governance # 治理测试
+make test-route     # 路径模块测试
+```
+
+前端测试和冒烟验证走独立脚本：
+
+```bash
+./scripts/regression.sh   # 全量回归
+./scripts/smoke.sh        # 冒烟验证
 ```
 
 ## 文档收口说明

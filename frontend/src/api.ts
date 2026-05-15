@@ -246,7 +246,7 @@ export async function fetchActivityRanking(category = "trip_count", limit = 30):
 // ── risk monitoring ──
 
 export type FatigueRecord = {
-  driver_id: string;
+  vehicle_id: string;
   window_start: string;
   window_end: string;
   run_minutes: number;
@@ -256,7 +256,7 @@ export type FatigueRecord = {
 };
 
 export type AbnormalRecord = {
-  driver_id: string;
+  vehicle_id: string;
   event_date: string;
   single_trip_duration_min: number;
   single_trip_distance_m: number;

@@ -15,7 +15,7 @@ def fetch_fatigue(
     limit: int = 100,
 ) -> list[dict[str, object]]:
     base = (
-        "SELECT driver_id, window_start, window_end, run_minutes, "
+        "SELECT vehicle_id, window_start, window_end, run_minutes, "
         "fatigue_level, threshold_minutes, severe_threshold_minutes "
         "FROM risk_driver_fatigue WHERE 1=1"
     )
@@ -36,7 +36,7 @@ def fetch_fatigue_events(
     rows = (
         db.execute(
             text(
-                "SELECT id, driver_id, event_time, fatigue_level, run_minutes "
+                "SELECT id, vehicle_id, event_time, fatigue_level, run_minutes "
                 "FROM risk_driver_fatigue_event ORDER BY event_time DESC LIMIT :lim"
             ),
             {"lim": limit},
@@ -53,7 +53,7 @@ def fetch_abnormal_running(
     limit: int = 100,
 ) -> list[dict[str, object]]:
     base = (
-        "SELECT driver_id, event_date, single_trip_duration_min, "
+        "SELECT vehicle_id, event_date, single_trip_duration_min, "
         "single_trip_distance_m, risk_level "
         "FROM risk_abnormal_running WHERE 1=1"
     )
@@ -73,7 +73,7 @@ def fetch_night_risk(
     limit: int = 100,
 ) -> list[dict[str, object]]:
     base = (
-        "SELECT driver_id, event_date, night_distance_m, night_duration_min, "
+        "SELECT vehicle_id, event_date, night_distance_m, night_duration_min, "
         "night_speed_kmh, risk_level "
         "FROM risk_night_high_risk WHERE 1=1"
     )

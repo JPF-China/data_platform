@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+
+<html class="light" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>哈尔滨车辆轨迹分析 · 大屏监控</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Work+Sans:wght@600;700&amp;family=JetBrains+Mono:wght@500;700&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-secondary-container": "#586579",
+                        "on-error-container": "#93000a",
+                        "error-container": "#ffdad6",
+                        "tertiary-fixed": "#c9e6ff",
+                        "on-secondary-fixed-variant": "#3b485a",
+                        "on-primary-fixed-variant": "#004493",
+                        "on-primary-fixed": "#001a41",
+                        "surface-container-high": "#e6e8f2",
+                        "tertiary-fixed-dim": "#89ceff",
+                        "surface-dim": "#d8d9e3",
+                        "surface-bright": "#f9f9ff",
+                        "primary-fixed": "#d8e2ff",
+                        "on-secondary": "#ffffff",
+                        "background": "#f9f9ff",
+                        "on-error": "#ffffff",
+                        "inverse-primary": "#adc7ff",
+                        "on-tertiary-fixed": "#001e2f",
+                        "primary-fixed-dim": "#adc7ff",
+                        "tertiary-container": "#007eb4",
+                        "surface": "#f9f9ff",
+                        "secondary": "#525f73",
+                        "on-surface": "#191c23",
+                        "inverse-surface": "#2d3038",
+                        "on-primary": "#ffffff",
+                        "on-secondary-fixed": "#0f1c2d",
+                        "tertiary": "#006490",
+                        "surface-tint": "#005bc0",
+                        "secondary-fixed": "#d6e3fb",
+                        "surface-container": "#ecedf7",
+                        "surface-container-lowest": "#ffffff",
+                        "on-tertiary-fixed-variant": "#004c6e",
+                        "on-background": "#191c23",
+                        "secondary-container": "#d6e3fb",
+                        "on-tertiary": "#ffffff",
+                        "surface-container-low": "#f2f3fd",
+                        "on-primary-container": "#ffffff",
+                        "primary": "#1a73e8",
+                        "primary-container": "#1a73e8",
+                        "on-tertiary-container": "#ffffff",
+                        "on-surface-variant": "#414754",
+                        "inverse-on-surface": "#eff0fa",
+                        "secondary-fixed-dim": "#bac7de",
+                        "outline": "#727785",
+                        "outline-variant": "#c1c6d6",
+                        "surface-variant": "#e0e2ec",
+                        "error": "#ba1a1a",
+                        "surface-container-highest": "#e0e2ec"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "12px",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "unit": "4px",
+                        "margin-lg": "32px",
+                        "gutter": "16px",
+                        "margin-md": "24px",
+                        "margin-sm": "16px",
+                        "container-max": "1920px"
+                    },
+                    "fontFamily": {
+                        "data-sm": ["JetBrains Mono"],
+                        "headline-sm": ["Work Sans"],
+                        "headline-md": ["Work Sans"],
+                        "data-lg": ["JetBrains Mono"],
+                        "headline-lg": ["Work Sans"],
+                        "body-md": ["Inter"],
+                        "data-md": ["JetBrains Mono"],
+                        "body-sm": ["Inter"],
+                        "display-lg": ["Work Sans"],
+                        "body-lg": ["Inter"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: #f9f9ff;
+            color: #191c23;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(8px);
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #c1c6d6;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body class="flex flex-col">
+<!-- TopAppBar -->
+<header class="flex justify-between items-center w-full px-margin-lg h-16 max-w-container-max mx-auto bg-surface dark:bg-surface-dim border-b border-outline-variant shadow-sm z-50">
+<div class="flex items-center gap-gutter">
+<h1 class="font-headline-md text-headline-md font-bold tracking-tight text-primary dark:text-primary-fixed">哈尔滨车辆轨迹分析 · 大屏监控</h1>
+<div class="px-3 py-1 rounded-full bg-primary-container text-white font-data-sm text-data-sm flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">location_on</span>
+                哈尔滨
+            </div>
+</div>
+<div class="flex items-center gap-margin-md">
+<div class="flex items-center gap-2 font-data-md text-data-md text-on-surface-variant">
+<span class="material-symbols-outlined">schedule</span>
+                2023-10-24 14:30:05
+            </div>
+<div class="flex gap-4">
+<span class="material-symbols-outlined text-primary cursor-pointer hover:bg-surface-container transition-colors p-2 rounded-full" data-icon="notifications">notifications</span>
+<span class="material-symbols-outlined text-primary cursor-pointer hover:bg-surface-container transition-colors p-2 rounded-full" data-icon="account_circle">account_circle</span>
+</div>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="flex-1 grid grid-rows-[auto_1fr] p-gutter gap-gutter overflow-hidden max-w-container-max mx-auto w-full">
+<!-- KPI Row -->
+<section class="grid grid-cols-4 gap-gutter h-28">
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-4 shadow-sm flex flex-col justify-between">
+<div class="flex justify-between items-center">
+<span class="font-body-sm text-on-surface-variant">总车辆</span>
+<span class="material-symbols-outlined text-primary" data-icon="directions_car">directions_car</span>
+</div>
+<div class="flex items-baseline gap-2">
+<span class="font-data-lg text-headline-md text-primary">12,847</span>
+<span class="font-data-sm text-data-sm text-on-secondary-container">Active 5,632</span>
+</div>
+</div>
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-4 shadow-sm flex flex-col justify-between">
+<div class="flex justify-between items-center">
+<span class="font-body-sm text-on-surface-variant">总行程</span>
+<span class="material-symbols-outlined text-primary" data-icon="route">route</span>
+</div>
+<div class="flex items-baseline gap-2">
+<span class="font-data-lg text-headline-md text-primary">48,392</span>
+<span class="font-data-sm text-data-sm text-on-secondary-container">Daily 9,678</span>
+</div>
+</div>
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-4 shadow-sm flex flex-col justify-between">
+<div class="flex justify-between items-center">
+<span class="font-body-sm text-on-surface-variant">总里程</span>
+<span class="material-symbols-outlined text-primary" data-icon="speed">speed</span>
+</div>
+<div class="flex items-baseline gap-2">
+<span class="font-data-lg text-headline-md text-primary">1,284,593 <span class="text-data-sm font-normal">km</span></span>
+<span class="font-data-sm text-data-sm text-on-secondary-container">Daily 256,918</span>
+</div>
+</div>
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-4 shadow-sm flex flex-col justify-between">
+<div class="flex justify-between items-center">
+<span class="font-body-sm text-on-surface-variant">活跃告警</span>
+<span class="material-symbols-outlined text-error" data-icon="warning">warning</span>
+</div>
+<div class="flex items-baseline gap-2">
+<span class="font-data-lg text-headline-md text-error">23</span>
+<div class="flex gap-2">
+<span class="px-1.5 py-0.5 rounded bg-error-container text-on-error-container font-data-sm text-[10px]">Fatigue 3</span>
+<span class="px-1.5 py-0.5 rounded bg-surface-container-highest text-on-surface-variant font-data-sm text-[10px]">Abnormal 12</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Dashboard Body -->
+<section class="grid grid-cols-[65%_35%] gap-gutter overflow-hidden h-full pb-8">
+<!-- Left: Map Area -->
+<div class="relative bg-[#191c23] rounded-lg overflow-hidden border border-outline-variant shadow-sm">
+<!-- Map Placeholder Image -->
+<img alt="Harbin Map" class="w-full h-full object-cover opacity-60" data-alt="A sophisticated dark-themed digital map visualization of Harbin's urban center. The map features glowing heat-map overlays in shades of neon blue and vibrant orange, representing heavy traffic density along major thoroughfares and bridge crossings. The aesthetic is futuristic and high-tech, with minimalist UI elements, fine grid lines, and soft glowing points indicating active vehicle positions against the charcoal-colored city grid." data-location="Harbin" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCCYresATjFpsxSBrxJ2zA52k98njBJbN4aZccOphKfDLpcgTZs7OLfaMWC-cOgHwOPw6REQRllI98tGq-loBP7G5-I_MCERtXofzDOJlN_G0aS3oNpC4azmkrGMj73IgN7kKGo7M3_unrc4DRs82B-nOjqliZugf0bCrI2_tCQdNXRojXrtOTxciukfyQdAane-0CVmk0DYp7J_L1jlfQ08vYau5Lsf8xp8z8gcOcJxtYFoV0tJy3eAHYSjiLFmnrGaMBmJ7RXfgo"/>
+<!-- Overlay Header -->
+<div class="absolute top-4 left-4 glass-panel p-4 rounded-lg border border-white/20">
+<h2 class="font-headline-sm text-headline-sm text-on-surface mb-1">热力图实时回放 · 哈尔滨城区</h2>
+<p class="font-body-sm text-on-surface-variant">Real-time heat-map playback of urban traffic density</p>
+</div>
+<!-- Timeline Bar -->
+<div class="absolute bottom-6 left-6 right-6 glass-panel p-4 rounded-xl border border-white/20 flex flex-col gap-3">
+<div class="flex justify-between items-center">
+<div class="flex items-center gap-4">
+<button class="bg-primary text-white w-8 h-8 rounded-full flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="play_arrow">play_arrow</span>
+</button>
+<span class="font-data-md text-data-md text-primary">14:30:00</span>
+</div>
+<div class="flex gap-4 font-data-sm text-data-sm text-on-surface-variant">
+<span>00:00</span>
+<span>23:55</span>
+</div>
+</div>
+<!-- Slider -->
+<div class="relative w-full h-1 bg-surface-container rounded-full overflow-hidden">
+<div class="absolute top-0 left-0 h-full bg-primary" style="width: 62.5%;"></div>
+<div class="absolute top-1/2 left-[62.5%] -translate-y-1/2 w-4 h-4 bg-white border-2 border-primary rounded-full shadow-md"></div>
+</div>
+</div>
+</div>
+<!-- Right: Data Stack -->
+<div class="flex flex-col gap-gutter overflow-hidden h-full">
+<!-- Risk Monitoring -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-gutter shadow-sm flex-1 flex flex-col">
+<div class="flex justify-between items-center mb-4">
+<h3 class="font-headline-sm text-headline-sm text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-primary" data-icon="security">security</span>
+                            风险实时监测
+                        </h3>
+</div>
+<div class="space-y-3 flex-1 overflow-y-auto custom-scrollbar">
+<div class="flex items-center justify-between p-3 bg-surface-container-low rounded">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-error" data-icon="distance">distance</span>
+<span class="font-body-md text-body-md">Fatigue Risk</span>
+</div>
+<span class="px-3 py-1 rounded-full bg-error-container text-on-error-container font-data-sm text-data-sm">High</span>
+</div>
+<div class="flex items-center justify-between p-3 bg-surface-container-low rounded">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-tertiary" data-icon="emergency_home">emergency_home</span>
+<span class="font-body-md text-body-md">Abnormal Stop</span>
+</div>
+<span class="px-3 py-1 rounded-full bg-tertiary-fixed text-on-tertiary-fixed-variant font-data-sm text-data-sm">Mid</span>
+</div>
+<div class="flex items-center justify-between p-3 bg-surface-container-low rounded">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-secondary" data-icon="nightlight">nightlight</span>
+<span class="font-body-md text-body-md">Night Safety</span>
+</div>
+<span class="px-3 py-1 rounded-full bg-secondary-container text-on-secondary-container font-data-sm text-data-sm">Normal</span>
+</div>
+</div>
+</div>
+<!-- Operational Portrait -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-gutter shadow-sm flex-1 flex flex-col">
+<h3 class="font-headline-sm text-headline-sm text-on-surface mb-4 flex items-center gap-2">
+<span class="material-symbols-outlined text-primary" data-icon="analytics">analytics</span>
+                        运营画像速览
+                    </h3>
+<div class="space-y-4 flex-1">
+<div>
+<div class="flex justify-between mb-1">
+<span class="font-body-sm text-on-surface-variant">Commuter (通勤)</span>
+<span class="font-data-md text-data-md text-primary">2,341</span>
+</div>
+<div class="h-2 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-primary" style="width: 75%;"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between mb-1">
+<span class="font-body-sm text-on-surface-variant">Night Active (夜间活跃)</span>
+<span class="font-data-md text-data-md text-primary">876</span>
+</div>
+<div class="h-2 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-secondary" style="width: 35%;"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between mb-1">
+<span class="font-body-sm text-on-surface-variant">Long-distance (长途)</span>
+<span class="font-data-md text-data-md text-primary">1,203</span>
+</div>
+<div class="h-2 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-tertiary" style="width: 55%;"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Data Asset Status -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-gutter shadow-sm flex-1 flex flex-col">
+<h3 class="font-headline-sm text-headline-sm text-on-surface mb-4 flex items-center gap-2">
+<span class="material-symbols-outlined text-primary" data-icon="database">database</span>
+                        数据资产状态
+                    </h3>
+<table class="w-full text-left">
+<thead>
+<tr class="border-b border-outline-variant">
+<th class="pb-2 font-data-sm text-data-sm text-on-surface-variant uppercase">Layer</th>
+<th class="pb-2 font-data-sm text-data-sm text-on-surface-variant uppercase text-right">Records</th>
+<th class="pb-2 font-data-sm text-data-sm text-on-surface-variant uppercase text-right">Status</th>
+</tr>
+</thead>
+<tbody class="font-data-md text-data-md">
+<tr class="border-b border-outline-variant/30">
+<td class="py-2 text-primary">DWD_TRIP</td>
+<td class="py-2 text-right">24.8M</td>
+<td class="py-2 text-right">
+<span class="material-symbols-outlined text-[16px] text-primary" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</td>
+</tr>
+<tr class="border-b border-outline-variant/30">
+<td class="py-2 text-primary">DWS_STAT</td>
+<td class="py-2 text-right">5.2M</td>
+<td class="py-2 text-right">
+<span class="material-symbols-outlined text-[16px] text-primary" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</td>
+</tr>
+<tr class="">
+<td class="py-2 text-primary">ADS_SCREEN</td>
+<td class="py-2 text-right">124K</td>
+<td class="py-2 text-right">
+<span class="material-symbols-outlined text-[16px] text-primary" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</section>
+</main>
+<!-- Footer Status Bar -->
+<footer class="fixed bottom-0 left-0 w-full h-8 flex items-center justify-between px-margin-lg z-50 bg-surface-container-highest dark:bg-inverse-surface border-t border-outline-variant">
+<div class="flex items-center gap-4">
+<span class="font-data-sm text-data-sm text-on-surface-variant dark:text-inverse-on-surface">数据范围: 2015-01-03 ~ 2015-01-07</span>
+<span class="text-outline-variant">|</span>
+<span class="font-data-sm text-data-sm text-on-surface-variant dark:text-inverse-on-surface">数据库: PostgreSQL + PostGIS + pgRouting</span>
+</div>
+<div class="flex items-center gap-4">
+<span class="font-data-sm text-data-sm text-on-surface-variant dark:text-inverse-on-surface">API: FastAPI v0.1.0</span>
+<span class="text-outline-variant">|</span>
+<span class="font-data-sm text-data-sm text-on-surface-variant dark:text-inverse-on-surface">前端: React + Vite + MapLibre</span>
+</div>
+</footer>
+</body></html>

@@ -1,4 +1,4 @@
-.PHONY: help refresh-all refresh-stats refresh-ops refresh-risk refresh-report refresh-governance test
+.PHONY: help refresh-all refresh-stats refresh-ops refresh-risk refresh-report refresh-governance test deploy-fresh deploy-auto
 
 DB_HOST ?= postgres
 DB_USER ?= postgres
@@ -48,3 +48,14 @@ test-governance: ## Run governance tests only
 
 test-route: ## Run route tests only
 	docker compose exec -T backend sh -lc "DB_HOST=$(DB_HOST) DB_USER=$(DB_USER) DB_PASSWORD=$(DB_PASSWORD) PYTHONPATH=/app uv run pytest -q /app/tests/test_route_analysis_schema.py"
+
+# ── deploy ──
+
+deploy-fresh: ## Full deployment from scratch
+	./scripts/deploy.sh --fresh
+
+deploy-auto: ## Auto-detect state and deploy
+	./scripts/deploy.sh --auto
+
+deploy-module: ## Force refresh a specific module (usage: make deploy-module MODULE=stats)
+	./scripts/deploy.sh --module $(MODULE)

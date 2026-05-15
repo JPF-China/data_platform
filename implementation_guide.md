@@ -32,7 +32,7 @@
 
 | 表名 | 作用 | 主键/唯一约束 | 分区键 | 关键字段 |
 |---|---|---|---|---|
-| `trips` | trip 基础信息 | `trip_uid` 唯一 | `trip_date` | `trip_id`、`source_trip_key`、`devid`、`trip_date`、`start_time`、`end_time`、`point_count`、`is_valid`、`source_file` |
+| `trips` | trip 基础信息 | `trip_uid` 唯一 | `trip_date` | `trip_uid`、`source_trip_key`、`devid`、`trip_date`、`start_time`、`end_time`、`point_count`、`is_valid`、`source_file` |
 | `trip_points_raw` | 原始轨迹点 | `(trip_id, point_seq)` 唯一 | `trip_date` | `trip_id`、`point_seq`、`event_time`、`tms`、`devid`、`lat`、`lon`、`speed`、`geom`、`is_valid` |
 | `trip_match_meta` | 匹配元信息 | 无唯一约束 | `trip_date` | `trip_id`、`point_seq`、`matched_seq`、`road_id`、`road_name`、`direction`、`is_virtual`、`confidence` |
 | `trip_points_matched` | 匹配后轨迹点 | `(trip_id, point_seq)` 唯一 | `trip_date` | `trip_id`、`point_seq`、`event_time`、`tms`、`lat`、`lon`、`geom`、`road_id`、`road_name` |
@@ -76,7 +76,7 @@
 
 | 表名 | 作用 | 主键 |
 |---|---|---|
-| `risk_driver_fatigue` | 24h 窗口疲劳驾驶评估 | `(driver_id, window_start)` |
+| `risk_driver_fatigue` | 24h 窗口疲劳驾驶评估 | `(vehicle_id, window_start)` |
 | `risk_driver_fatigue_event` | 疲劳/严重疲劳事件明细 | `id` (bigserial) |
 | `risk_abnormal_running` | 异常长时间运行事件 | `id` (bigserial) |
 | `risk_night_high_risk` | 夜间高风险事件 | `id` (bigserial) |
@@ -98,6 +98,13 @@
 | `meta_job_status` | 任务状态追踪 | `job_name` |
 | `meta_data_quality_check` | 数据质量检查 | `check_key` |
 | `ads_asset_portal_summary` | 资产门户摘要 | `asset_layer` |
+
+### 3.8 运维表
+
+| 表名 | 作用 | 主键 |
+|---|---|---|
+| `ingest_runs` | 入仓任务运行记录 | `id` (bigserial) |
+| `ingest_file_state` | 文件级入仓状态追踪 | `id` (bigserial) |
 
 ## 4. 表间依赖关系
 
@@ -261,10 +268,9 @@ ingest_runs -> meta_job_status
 - `GET /api/v1/chart/daily-speed-boxplot`
 - `GET /api/v1/map/heatmap`
 - `GET /api/v1/map/heatmap/buckets`
+- `GET /api/v1/map/vehicle-path`
 - `POST /api/v1/route/compare`
 - `GET /api/v1/route/capability`
-
-**待扩展** (新增模块 API):
 - `GET /api/v1/ops/vehicle-profiles` — 运营画像查询
 - `GET /api/v1/ops/frequent-routes` — 常跑路段
 - `GET /api/v1/ops/activity-ranking` — 活跃排行
@@ -284,7 +290,7 @@ ingest_runs -> meta_job_status
 **输入**: API 返回值
 **输出**: 页面、图表、地图
 **职责**: 展示与交互、不直连数据库
-**待扩展**: 运营画像面板、风险监测看板、报表展示页、数据治理视图
+**已实现**: 总览、热力回放、路径对比、运营画像面板、风险监测看板、报表展示页、数据治理视图
 
 ## 6. 执行模式
 

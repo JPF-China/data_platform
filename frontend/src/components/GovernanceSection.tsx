@@ -50,7 +50,7 @@ export function GovernanceSection() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <SurfaceCard title="核心资产目录" className="lg:col-span-2">
-          <div className="overflow-y-auto hide-scrollbar" style={{ maxHeight: "calc(100vh - 320px)" }}>
+          <div className="overflow-y-auto hide-scrollbar" style={{ maxHeight: "calc(100vh - 280px)", flex: 1 }}>
             <table className="w-full text-[13px]">
               <thead className="sticky top-0 bg-surface-low">
                 <tr className="text-text-secondary text-[11px] uppercase tracking-wider">
@@ -74,7 +74,7 @@ export function GovernanceSection() {
                         {a.status === "ready" ? "就绪" : a.status === "unknown" ? "未知" : a.status}
                       </span>
                     </td>
-                    <td className="px-3 py-2 text-right data-mono tabular-nums">{a.row_count > 0 ? a.row_count.toLocaleString() : "-"}</td>
+                    <td className="px-3 py-2 text-right data-mono tabular-nums">{a.row_count >= 0 ? a.row_count.toLocaleString() : "-"}</td>
                   </tr>
                 ))}
               </tbody>

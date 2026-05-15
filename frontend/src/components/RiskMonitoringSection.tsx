@@ -36,7 +36,7 @@ function LevelBadge({
   );
 }
 
-export function RiskMonitoringSection({ onViewPath }: { onViewPath: (driverId: string) => Promise<void> | void }) {
+export function RiskMonitoringSection({ onViewPath }: { onViewPath: (vehicleId: string) => Promise<void> | void }) {
   const [fatigue, setFatigue] = useState<FatigueRecord[]>([]);
   const [abnormal, setAbnormal] = useState<AbnormalRecord[]>([]);
   const [summary, setSummary] = useState<RiskSummaryRow[]>([]);
@@ -73,10 +73,10 @@ export function RiskMonitoringSection({ onViewPath }: { onViewPath: (driverId: s
 
   const filteredFatigue = fatigue
     .filter((f) => (fatigueLevel ? f.fatigue_level === fatigueLevel : true))
-    .filter((f) => (normalizedSearch ? f.driver_id.includes(normalizedSearch) : true));
+    .filter((f) => (normalizedSearch ? f.vehicle_id.includes(normalizedSearch) : true));
   const filteredAbnormal = abnormal
     .filter((a) => (abnormalLevel ? a.risk_level === abnormalLevel : true))
-    .filter((a) => (normalizedSearch ? a.driver_id.includes(normalizedSearch) : true));
+    .filter((a) => (normalizedSearch ? a.vehicle_id.includes(normalizedSearch) : true));
   const latest = summary[0];
 
   if (loading) return <div className="loading">加载中...</div>;
@@ -88,7 +88,7 @@ export function RiskMonitoringSection({ onViewPath }: { onViewPath: (driverId: s
       description="疲劳驾驶、异常运行与风险汇总"
       actions={
         <input
-          placeholder="搜索驾驶员ID..."
+          placeholder="搜索车辆ID..."
           value={searchVid}
           onChange={(e) => {
             const v = e.target.value;
@@ -103,7 +103,7 @@ export function RiskMonitoringSection({ onViewPath }: { onViewPath: (driverId: s
     >
       {latest ? (
         <div className="kpi-grid">
-          <MetricCard label="总驾驶员" value={latest.total_drivers.toLocaleString()} />
+          <MetricCard label="总车辆" value={latest.total_drivers.toLocaleString()} />
           <MetricCard label="疲劳" value={latest.fatigue_drivers} />
           <MetricCard label="严重疲劳" value={latest.severe_fatigue_drivers} />
         </div>
@@ -123,7 +123,7 @@ export function RiskMonitoringSection({ onViewPath }: { onViewPath: (driverId: s
             <table className="w-full text-[13px]">
               <thead className="sticky top-0 bg-surface-low">
                 <tr className="text-text-secondary text-[11px] uppercase tracking-wider">
-                  <th className="text-left px-4 py-2 font-medium">驾驶员ID</th>
+                  <th className="text-left px-4 py-2 font-medium">车辆ID</th>
                   <th className="text-left px-3 py-2 font-medium">时间窗口</th>
                   <th className="text-right px-3 py-2 font-medium">运行(分)</th>
                   <th className="text-center px-3 py-2 font-medium">级别</th>
@@ -132,8 +132,8 @@ export function RiskMonitoringSection({ onViewPath }: { onViewPath: (driverId: s
               </thead>
               <tbody className="divide-y divide-border-light">
                 {filteredFatigue.slice(0, 30).map((f) => (
-                  <tr key={f.driver_id + f.window_start} className="hover:bg-primary-light/30 transition-colors">
-                    <td className="px-4 py-2 data-mono">{f.driver_id}</td>
+                  <tr key={f.vehicle_id + f.window_start} className="hover:bg-primary-light/30 transition-colors">
+                    <td className="px-4 py-2 data-mono">{f.vehicle_id}</td>
                     <td className="px-3 py-2 data-mono text-[11px]">{new Date(f.window_start).toLocaleDateString()}</td>
                     <td className="px-3 py-2 text-right data-mono tabular-nums">{f.run_minutes}</td>
                     <td className="px-3 py-2 text-center">
@@ -144,8 +144,8 @@ export function RiskMonitoringSection({ onViewPath }: { onViewPath: (driverId: s
                         type="button"
                         className="secondary-btn"
                         onClick={() => {
-                          setSearchVid(f.driver_id);
-                          void onViewPath(f.driver_id);
+                          setSearchVid(f.vehicle_id);
+                          void onViewPath(f.vehicle_id);
                         }}
                       >
                         查看路径
@@ -174,7 +174,7 @@ export function RiskMonitoringSection({ onViewPath }: { onViewPath: (driverId: s
             <table className="w-full text-[13px]">
               <thead className="sticky top-0 bg-surface-low">
                 <tr className="text-text-secondary text-[11px] uppercase tracking-wider">
-                  <th className="text-left px-4 py-2 font-medium">驾驶员ID</th>
+                  <th className="text-left px-4 py-2 font-medium">车辆ID</th>
                   <th className="text-left px-3 py-2 font-medium">日期</th>
                   <th className="text-right px-3 py-2 font-medium">时长(分)</th>
                   <th className="text-center px-3 py-2 font-medium">级别</th>
@@ -182,8 +182,8 @@ export function RiskMonitoringSection({ onViewPath }: { onViewPath: (driverId: s
               </thead>
               <tbody className="divide-y divide-border-light">
                 {filteredAbnormal.slice(0, 30).map((a) => (
-                  <tr key={a.driver_id + a.event_date} className="hover:bg-primary-light/30 transition-colors">
-                    <td className="px-4 py-2 data-mono">{a.driver_id}</td>
+                  <tr key={a.vehicle_id + a.event_date} className="hover:bg-primary-light/30 transition-colors">
+                    <td className="px-4 py-2 data-mono">{a.vehicle_id}</td>
                     <td className="px-3 py-2 text-[11px]">{a.event_date}</td>
                     <td className="px-3 py-2 text-right data-mono tabular-nums">{a.single_trip_duration_min}</td>
                     <td className="px-3 py-2 text-center">

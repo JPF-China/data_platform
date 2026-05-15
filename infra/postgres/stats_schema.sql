@@ -312,8 +312,22 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- migration: rename driver_id → vehicle_id for existing tables (safe if already renamed)
+DO $$ BEGIN
+  ALTER TABLE risk_driver_fatigue RENAME COLUMN driver_id TO vehicle_id;
+EXCEPTION WHEN undefined_column THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE risk_driver_fatigue_event RENAME COLUMN driver_id TO vehicle_id;
+EXCEPTION WHEN undefined_column THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE risk_abnormal_running RENAME COLUMN driver_id TO vehicle_id;
+EXCEPTION WHEN undefined_column THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE risk_night_high_risk RENAME COLUMN driver_id TO vehicle_id;
+EXCEPTION WHEN undefined_column THEN NULL; END $$;
+
 CREATE TABLE IF NOT EXISTS risk_driver_fatigue (
-  driver_id text NOT NULL,
+  vehicle_id text NOT NULL,
   window_start timestamp NOT NULL,
   window_end timestamp NOT NULL,
   run_minutes integer NOT NULL,
@@ -321,12 +335,12 @@ CREATE TABLE IF NOT EXISTS risk_driver_fatigue (
   threshold_minutes integer NOT NULL,
   severe_threshold_minutes integer NOT NULL DEFAULT 840,
   updated_at timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (driver_id, window_start)
+  PRIMARY KEY (vehicle_id, window_start)
 );
 
 CREATE TABLE IF NOT EXISTS risk_driver_fatigue_event (
   id bigserial PRIMARY KEY,
-  driver_id text NOT NULL,
+  vehicle_id text NOT NULL,
   event_time timestamp NOT NULL,
   fatigue_level text NOT NULL,
   run_minutes integer NOT NULL,
@@ -336,11 +350,11 @@ CREATE TABLE IF NOT EXISTS risk_driver_fatigue_event (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS idx_risk_fatigue_driver_time
-ON risk_driver_fatigue(driver_id, window_start DESC);
+CREATE INDEX IF NOT EXISTS idx_risk_fatigue_vehicle_time
+ON risk_driver_fatigue(vehicle_id, window_start DESC);
 
-CREATE INDEX IF NOT EXISTS idx_risk_fatigue_event_driver_time
-ON risk_driver_fatigue_event(driver_id, event_time DESC);
+CREATE INDEX IF NOT EXISTS idx_risk_fatigue_event_vehicle_time
+ON risk_driver_fatigue_event(vehicle_id, event_time DESC);
 
 CREATE OR REPLACE FUNCTION risk_refresh_driver_fatigue()
 RETURNS void AS $$
@@ -350,7 +364,7 @@ BEGIN
 
   WITH segment_runs AS (
     SELECT
-      t.devid AS driver_id,
+      t.devid AS vehicle_id,
       s.start_time,
       s.end_time,
       GREATEST(0, EXTRACT(EPOCH FROM (s.end_time - s.start_time)) / 60.0) AS run_minutes
@@ -363,34 +377,34 @@ BEGIN
   ),
   driver_activity AS (
     SELECT
-      driver_id,
+      vehicle_id,
       MIN(start_time) AS first_time,
       MAX(end_time) AS last_time
     FROM segment_runs
-    GROUP BY driver_id
+    GROUP BY vehicle_id
   ),
   driver_windows AS (
     SELECT
-      driver_id,
+      vehicle_id,
       first_time AS window_start,
       first_time + INTERVAL '24 hour' AS window_end
     FROM driver_activity
   ),
   window_runs AS (
     SELECT
-      w.driver_id,
+      w.vehicle_id,
       w.window_start,
       w.window_end,
       COALESCE(SUM(r.run_minutes), 0) AS run_minutes
     FROM driver_windows w
     LEFT JOIN segment_runs r
-      ON r.driver_id = w.driver_id
+      ON r.vehicle_id = w.vehicle_id
      AND r.start_time < w.window_end
      AND r.end_time > w.window_start
-    GROUP BY w.driver_id, w.window_start, w.window_end
+    GROUP BY w.vehicle_id, w.window_start, w.window_end
   )
   INSERT INTO risk_driver_fatigue (
-    driver_id,
+    vehicle_id,
     window_start,
     window_end,
     run_minutes,
@@ -400,7 +414,7 @@ BEGIN
     updated_at
   )
   SELECT
-    driver_id,
+    vehicle_id,
     window_start,
     window_end,
     ROUND(run_minutes)::int,
@@ -415,7 +429,7 @@ BEGIN
   FROM window_runs;
 
   INSERT INTO risk_driver_fatigue_event (
-    driver_id,
+    vehicle_id,
     event_time,
     fatigue_level,
     run_minutes,
@@ -425,7 +439,7 @@ BEGIN
     created_at
   )
   SELECT
-    driver_id,
+    vehicle_id,
     window_end AS event_time,
     fatigue_level,
     run_minutes,
@@ -669,7 +683,7 @@ $$ LANGUAGE plpgsql;
 
 CREATE TABLE IF NOT EXISTS risk_abnormal_running (
   id bigserial PRIMARY KEY,
-  driver_id text NOT NULL,
+  vehicle_id text NOT NULL,
   event_date date NOT NULL,
   single_trip_duration_min integer NOT NULL,
   single_trip_distance_m double precision NOT NULL,
@@ -682,7 +696,7 @@ CREATE TABLE IF NOT EXISTS risk_abnormal_running (
 
 CREATE TABLE IF NOT EXISTS risk_night_high_risk (
   id bigserial PRIMARY KEY,
-  driver_id text NOT NULL,
+  vehicle_id text NOT NULL,
   event_date date NOT NULL,
   night_distance_m double precision NOT NULL DEFAULT 0,
   night_duration_min integer NOT NULL DEFAULT 0,
@@ -703,21 +717,21 @@ CREATE TABLE IF NOT EXISTS risk_summary (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS idx_abnormal_running_driver ON risk_abnormal_running(driver_id, event_date DESC);
-CREATE INDEX IF NOT EXISTS idx_night_risk_driver ON risk_night_high_risk(driver_id, event_date DESC);
+CREATE INDEX IF NOT EXISTS idx_abnormal_running_vehicle ON risk_abnormal_running(vehicle_id, event_date DESC);
+CREATE INDEX IF NOT EXISTS idx_night_risk_vehicle ON risk_night_high_risk(vehicle_id, event_date DESC);
 
 CREATE OR REPLACE FUNCTION risk_refresh_abnormal_running()
 RETURNS void AS $$
 BEGIN
   TRUNCATE risk_abnormal_running;
   INSERT INTO risk_abnormal_running (
-    driver_id, event_date, single_trip_duration_min,
+    vehicle_id, event_date, single_trip_duration_min,
     single_trip_distance_m, trip_id, risk_level,
     threshold_hours, details, created_at
   )
   WITH trip_duration AS (
     SELECT
-      t.devid AS driver_id,
+      t.devid AS vehicle_id,
       t.id AS trip_id,
       t.trip_date AS event_date,
       EXTRACT(EPOCH FROM (t.end_time - t.start_time)) / 60.0 AS duration_min,
@@ -732,7 +746,7 @@ BEGIN
     HAVING EXTRACT(EPOCH FROM (t.end_time - t.start_time)) / 60.0 >= 180
   )
   SELECT
-    driver_id, event_date,
+    vehicle_id, event_date,
     ROUND(duration_min)::integer,
     trip_distance_m, trip_id,
     CASE
@@ -752,12 +766,12 @@ RETURNS void AS $$
 BEGIN
   TRUNCATE risk_night_high_risk;
   INSERT INTO risk_night_high_risk (
-    driver_id, event_date, night_distance_m, night_duration_min,
+    vehicle_id, event_date, night_distance_m, night_duration_min,
     night_speed_kmh, risk_level, details, created_at
   )
   WITH night_segments AS (
     SELECT
-      t.devid AS driver_id,
+      t.devid AS vehicle_id,
       t.trip_date AS event_date,
       s.distance_m,
       EXTRACT(EPOCH FROM (s.end_time - s.start_time)) / 60.0 AS duration_min,
@@ -777,15 +791,15 @@ BEGIN
   ),
   night_agg AS (
     SELECT
-      driver_id, event_date,
+      vehicle_id, event_date,
       COALESCE(SUM(distance_m), 0) AS night_distance_m,
       COALESCE(SUM(duration_min), 0)::integer AS night_duration_min,
       AVG(avg_speed_kmh) FILTER (WHERE avg_speed_kmh IS NOT NULL) AS night_speed_kmh
     FROM night_segments
-    GROUP BY driver_id, event_date
+    GROUP BY vehicle_id, event_date
   )
   SELECT
-    driver_id, event_date, night_distance_m, night_duration_min,
+    vehicle_id, event_date, night_distance_m, night_duration_min,
     night_speed_kmh,
     CASE
       WHEN night_distance_m >= 50000 THEN 'high'
@@ -817,21 +831,21 @@ BEGIN
     ) AS summary_date,
     COALESCE((SELECT COUNT(DISTINCT devid) FROM trips WHERE is_valid = true), 0) AS total_drivers,
     COALESCE(
-      (SELECT COUNT(DISTINCT driver_id) FROM risk_driver_fatigue WHERE fatigue_level = 'fatigue'),
+      (SELECT COUNT(DISTINCT vehicle_id) FROM risk_driver_fatigue WHERE fatigue_level = 'fatigue'),
       0
     ) AS fatigue_drivers,
     COALESCE(
-      (SELECT COUNT(DISTINCT driver_id) FROM risk_driver_fatigue WHERE fatigue_level = 'severe'),
+      (SELECT COUNT(DISTINCT vehicle_id) FROM risk_driver_fatigue WHERE fatigue_level = 'severe'),
       0
     ) AS severe_fatigue_drivers,
     COALESCE((SELECT COUNT(*) FROM risk_abnormal_running), 0) AS abnormal_running_events,
-    COALESCE((SELECT COUNT(DISTINCT driver_id) FROM risk_night_high_risk WHERE risk_level = 'high'), 0) AS night_risk_drivers,
+    COALESCE((SELECT COUNT(DISTINCT vehicle_id) FROM risk_night_high_risk WHERE risk_level = 'high'), 0) AS night_risk_drivers,
     CASE
       WHEN COALESCE(
-        (SELECT COUNT(DISTINCT driver_id) FROM risk_driver_fatigue WHERE fatigue_level = 'severe'), 0
+        (SELECT COUNT(DISTINCT vehicle_id) FROM risk_driver_fatigue WHERE fatigue_level = 'severe'), 0
       ) > 0 THEN 'critical'
       WHEN COALESCE(
-        (SELECT COUNT(DISTINCT driver_id) FROM risk_driver_fatigue WHERE fatigue_level = 'fatigue'), 0
+        (SELECT COUNT(DISTINCT vehicle_id) FROM risk_driver_fatigue WHERE fatigue_level = 'fatigue'), 0
       ) > 0 THEN 'warning'
       ELSE 'normal'
     END,
@@ -913,13 +927,13 @@ BEGIN
       ELSE 0
     END AS night_trip_ratio,
     COALESCE(
-      (SELECT COUNT(DISTINCT driver_id)
+      (SELECT COUNT(DISTINCT vehicle_id)
        FROM risk_driver_fatigue f
        WHERE f.window_start::date = dm.metric_date AND f.fatigue_level = 'fatigue'),
       0
     ) AS fatigue_count,
     COALESCE(
-      (SELECT COUNT(DISTINCT driver_id)
+      (SELECT COUNT(DISTINCT vehicle_id)
        FROM risk_driver_fatigue f
        WHERE f.window_start::date = dm.metric_date AND f.fatigue_level = 'severe'),
       0
@@ -1119,6 +1133,30 @@ BEGIN
     now(),
     jsonb_build_object('heatmap_bins_count', cnt)
   FROM (SELECT COUNT(*) AS cnt FROM heatmap_bins) sub;
+
+  INSERT INTO meta_data_quality_check (check_key, status, checked_at, details)
+  SELECT
+    'ops_profile_fresh',
+    CASE WHEN cnt > 0 THEN 'pass' ELSE 'fail' END,
+    now(),
+    jsonb_build_object('ops_vehicle_profile_count', cnt)
+  FROM (SELECT COUNT(*) AS cnt FROM ops_vehicle_profile) sub;
+
+  INSERT INTO meta_data_quality_check (check_key, status, checked_at, details)
+  SELECT
+    'risk_data_fresh',
+    CASE WHEN cnt > 0 THEN 'pass' ELSE 'fail' END,
+    now(),
+    jsonb_build_object('risk_driver_fatigue_count', cnt)
+  FROM (SELECT COUNT(*) AS cnt FROM risk_driver_fatigue) sub;
+
+  INSERT INTO meta_data_quality_check (check_key, status, checked_at, details)
+  SELECT
+    'report_data_fresh',
+    CASE WHEN cnt > 0 THEN 'pass' ELSE 'fail' END,
+    now(),
+    jsonb_build_object('report_daily_summary_count', cnt)
+  FROM (SELECT COUNT(*) AS cnt FROM report_daily_summary) sub;
 END;
 $$ LANGUAGE plpgsql;
 

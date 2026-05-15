@@ -142,18 +142,6 @@ def _step4_aggregate_all(conn: psycopg.Connection) -> None:
     _refresh_risk.refresh(conn=conn)
     _refresh_report.refresh(conn=conn)
     _refresh_governance.refresh(conn=conn)
-    _progress("step2/5", "start: route network ingest")
-    imported = road_network_service.import_bfmap_csv(
-        cur=cur, csv_path=base_dir / "bfmap_ways.csv"
-    )
-    _progress("step2/5", f"done: imported bfmap_ways rows={imported}")
-    _progress("step2/5", "start: rebuild road_segments from bfmap")
-    count = road_network_service.rebuild_road_segments_from_bfmap(cur)
-    _progress("step2/5", f"done: rebuilt road_segments rows={count}")
-    _progress("step2/5", "start: rebuild ingest_road_map")
-    mapped = road_mapping_service.rebuild_ingest_road_map(cur)
-    _progress("step2/5", f"done: rebuilt ingest_road_map rows={mapped}")
-    return imported, mapped
 
 
 def _step_ingest_only(

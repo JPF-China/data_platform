@@ -12,7 +12,6 @@ import psycopg
 from app.etl.refresh_base import (
     cli_wrapper,
     get_connection,
-    progress,
     run_python,
     run_sql,
     with_module_footer,

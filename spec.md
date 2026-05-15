@@ -63,7 +63,9 @@ H5/JLD2 原始文件
 - `daily_speed_boxplot`：每日速度箱形图
 - `heatmap_bins`：热力图时间窗聚合
 - `road_speed_bins`：道路 5 分钟速度桶（路径最快路权重输入）
-- `table_row_stats`：表级行数与更新时间统计（新增，建议）
+- `hourly_metrics`：小时粒度聚合指标
+- `road_daily_stats`：道路每日统计
+- `table_row_stats`：表级行数与更新时间统计
 
 ### 4.4 路径层
 
@@ -103,6 +105,8 @@ H5/JLD2 原始文件
 - `meta_job_status`：任务执行状态追踪
 - `meta_data_quality_check`：数据质量检查结果
 - `ads_asset_portal_summary`：资产门户分层摘要
+- `ingest_runs`：入仓任务运行状态追踪
+- `ingest_file_state`：文件级入仓状态追踪
 
 ## 5. 表与分区建议
 
@@ -245,8 +249,6 @@ H5/JLD2 原始文件
 - `GET /api/v1/map/heatmap/buckets`
 - `POST /api/v1/route/compare`
 - `GET /api/v1/route/capability`
-
-**新增模块 API（待实现）**:
 - `GET /api/v1/ops/vehicle-profiles` — 车辆画像查询
 - `GET /api/v1/ops/frequent-routes` — 常跑路段
 - `GET /api/v1/ops/activity-ranking` — 活跃排行
