@@ -87,22 +87,24 @@ def _set_rebuild_tables_unlogged(cur: psycopg.Cursor) -> None:
     )
 
 
-def _set_rebuild_tables_logged(cur: psycopg.Cursor) -> None:
+def _set_rebuild_tables_logged(cur: psycopg.Cursor, conn: psycopg.Connection) -> None:
     _progress("step1/5", "  setting rebuild tables LOGGED …")
-    cur.execute(
-        """
-        ALTER TABLE trips SET LOGGED;
-        ALTER TABLE trip_points_raw SET LOGGED;
-        ALTER TABLE trip_match_meta SET LOGGED;
-        ALTER TABLE trip_points_matched SET LOGGED;
-        ALTER TABLE trip_segments SET LOGGED;
-        ALTER TABLE daily_metrics SET LOGGED;
-        ALTER TABLE daily_distance_boxplot SET LOGGED;
-        ALTER TABLE daily_speed_boxplot SET LOGGED;
-        ALTER TABLE heatmap_bins SET LOGGED;
-        ALTER TABLE table_row_stats SET LOGGED;
-        """
-    )
+    # 必须按父→子顺序单独提交，否则 PostgreSQL 会因 FK 引用约束拒绝 ALTER
+    _tables_logged_order = [
+        "trips",
+        "trip_points_raw",
+        "trip_match_meta",
+        "trip_points_matched",
+        "trip_segments",
+        "daily_metrics",
+        "daily_distance_boxplot",
+        "daily_speed_boxplot",
+        "heatmap_bins",
+        "table_row_stats",
+    ]
+    for tbl in _tables_logged_order:
+        cur.execute(f"ALTER TABLE {tbl} SET LOGGED")
+        conn.commit()
 
 
 def _truncate_rebuild_tables(cur: psycopg.Cursor) -> None:
@@ -233,6 +235,11 @@ def _step_ingest_only(
     ingest_service.create_ingest_hot_indexes(cur)
     conn.commit()
     _progress("step1/5", "done: hot indexes rebuilt")
+
+    # 确保表是 LOGGED（幂等，防止 UNLOGGED 表重启丢数据）
+    _progress("step1/5", "start: ensure tables LOGGED")
+    _set_rebuild_tables_logged(cur, conn)
+    _progress("step1/5", "done: tables LOGGED")
 
     cur.execute(
         "ANALYZE trips, trip_points_raw, trip_match_meta, trip_points_matched, trip_segments"
@@ -394,11 +401,10 @@ def run_pipeline(
                     _progress("step1/5", "done: segment metrics rebuilt")
 
                     # 6) 切回 LOGGED（保证数据安全）
-                    if pg_fast_mode:
-                        _progress("step1/5", "start: set rebuild tables LOGGED")
-                        _set_rebuild_tables_logged(cur)
-                        conn.commit()
-                        _progress("step1/5", "done: rebuild tables LOGGED")
+                    # 幂等操作：表已 LOGGED 则 no-op，始终确保 UNLOGGED 表复原
+                    _progress("step1/5", "start: set rebuild tables LOGGED")
+                    _set_rebuild_tables_logged(cur, conn)
+                    _progress("step1/5", "done: rebuild tables LOGGED")
 
                     # 7) 重建索引
                     _progress("step1/5", "start: rebuild hot indexes")

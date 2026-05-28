@@ -31,8 +31,8 @@ npm run test
 
 地图配置补充：
 
-- 默认瓦片源通过 `VITE_MAP_TILES` 配置，默认值为 OSM。
-- 若网络无法访问 OSM（底图空白），请在 `frontend/.env` 里改为可访问的瓦片地址。
+- 默认瓦片源通过 `VITE_MAP_TILES` 配置，默认使用高德地图瓦片（国内网络可达）。
+- 如需切换其他源，在 `frontend/.env` 中修改 `VITE_MAP_TILES`，或直接在 `frontend/src/App.tsx` 和 `frontend/src/components/BigScreen.tsx` 中修改默认 fallback 地址。
 - 支持逗号分隔多地址，例如：
 
 ```env

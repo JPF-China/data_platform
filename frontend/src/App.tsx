@@ -69,7 +69,7 @@ const navItems: Array<{ id: AppSection; title: string; desc: string; icon: strin
   { id: "governance", title: "数据治理", desc: "资产与质量", icon: "GV", group: "系统" },
 ];
 
-const mapTileTemplates = ((import.meta as unknown as { env?: Record<string, string | undefined> }).env?.VITE_MAP_TILES ?? "https://tile.openstreetmap.org/{z}/{x}/{y}.png")
+const mapTileTemplates = ((import.meta as unknown as { env?: Record<string, string | undefined> }).env?.VITE_MAP_TILES ?? "https://webrd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}")
   .split(",")
   .map((item) => item.trim())
   .filter((item) => item.length > 0);

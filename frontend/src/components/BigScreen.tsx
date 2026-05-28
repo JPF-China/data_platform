@@ -5,7 +5,7 @@ import type { RiskSummaryRow } from "../api";
 import { fetchRiskSummary, fetchAssets } from "../api";
 
 const API_BASE = (import.meta as any).env?.VITE_API_BASE ?? "";
-const MAP_TILES = (import.meta as any).env?.VITE_MAP_TILES ?? "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+const MAP_TILES = (import.meta as any).env?.VITE_MAP_TILES ?? "https://webrd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}";
 
 async function request<T>(url: string): Promise<T> {
   const r = await fetch(`${API_BASE}${url}`);

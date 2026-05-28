@@ -205,10 +205,10 @@ docker compose down
 
 补充：`docker-compose.yml` 已配置 `restart: unless-stopped`，Docker daemon 重启后会自动恢复已启动服务。
 
-若地图底图空白（通常是网络无法访问 OSM 瓦片）：
+若地图底图空白（通常是网络无法访问默认瓦片）：
 
-- 前端地图依赖瓦片服务 `VITE_MAP_TILES`（默认 OSM）。
-- 在受限网络下请在 `frontend/.env` 中改为可访问的瓦片地址（支持逗号分隔多地址）。
+- 前端地图依赖瓦片服务 `VITE_MAP_TILES`（默认使用高德地图瓦片，国内网络可达）。
+- 如需切换其他源，在 `frontend/.env` 中修改 `VITE_MAP_TILES`（支持逗号分隔多地址），或直接在 `frontend/src/App.tsx` 和 `frontend/src/components/BigScreen.tsx` 中修改默认 fallback 地址。
 - 修改后重建并重启前端：`docker compose build frontend && docker compose up -d frontend`。
 
 ## Docker 日常操作建议
